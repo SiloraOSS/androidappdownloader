@@ -15,7 +15,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) handleIntent(intent)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+            viewModel.checkSelfUpdateOnLaunch()
+        }
         setContent {
             AppTheme {
                 MainScreen(viewModel)

@@ -44,7 +44,8 @@ or repo) and the exact error shown on the card.
 
 ## Releasing
 
-1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
-2. Move the *Unreleased* changelog entries under the new version.
-3. Tag the commit (`git tag v1.2.3 && git push origin v1.2.3`). CI builds the signed APK and
-   attaches it to a GitHub release.
+1. Move the *Unreleased* changelog entries under a `## [1.2.3]` heading. Write them for
+   non-technical users: they are posted to Discord as-is.
+2. Optionally update the local-build default version in `app/build.gradle.kts`.
+3. Tag the commit (`git tag v1.2.3 && git push origin v1.2.3`). CI derives the version from the
+   tag, builds and signs the APK, publishes the GitHub release and announces it on Discord.

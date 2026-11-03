@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.edrock200.appdownloader.AppController
 import io.github.edrock200.appdownloader.data.AppEntry
 import io.github.edrock200.appdownloader.data.SourceType
 
@@ -61,6 +62,9 @@ fun MainScreen(vm: MainViewModel) {
     val checking by vm.checking.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val sharedText by vm.sharedText.collectAsStateWithLifecycle()
+    val selfUpdate by vm.selfUpdate.collectAsStateWithLifecycle()
+    val ops by vm.ops.collectAsStateWithLifecycle()
+    val isTv = rememberIsTv()
     val snackbar = remember { SnackbarHostState() }
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
@@ -88,8 +92,12 @@ fun MainScreen(vm: MainViewModel) {
         if (sharedText != null) showAdd = true
     }
 
+    fun startInstall(id: String) {
+        if (id == AppController.SELF_UPDATE_ID) vm.installSelfUpdate() else vm.install(id)
+    }
+
     fun install(id: String) {
-        if (SystemActions.canInstallPackages(context)) vm.install(id) else pendingInstallId = id
+        if (SystemActions.canInstallPackages(context)) startInstall(id) else pendingInstallId = id
     }
 
     Scaffold(
@@ -103,12 +111,15 @@ fun MainScreen(vm: MainViewModel) {
                                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                             }
                         } else {
-                            IconButton(onClick = vm::checkAll) {
+                            IconButton(onClick = vm::checkAll, modifier = Modifier.focusHighlight(FocusShapes.Icon)) {
                                 Icon(Icons.Filled.Refresh, contentDescription = "Check for updates")
                             }
                         }
                     }
-                    IconButton(onClick = { showSettings = true }) {
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.focusHighlight(FocusShapes.Icon),
+                    ) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
@@ -118,6 +129,7 @@ fun MainScreen(vm: MainViewModel) {
             if (items.isNotEmpty()) {
                 ExtendedFloatingActionButton(
                     onClick = { showAdd = true },
+                    modifier = Modifier.focusHighlight(FocusShapes.Fab),
                     icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                     text = { Text("Add") },
                 )
@@ -131,7 +143,12 @@ fun MainScreen(vm: MainViewModel) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                 LazyColumn(
                     modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                    // TVs need extra margin: edges of the picture can be cut off (overscan).
+                    contentPadding = if (isTv) {
+                        PaddingValues(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 120.dp)
+                    } else {
+                        PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
+                    },
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(items, key = { it.entry.id }) { item ->
@@ -191,12 +208,12 @@ fun MainScreen(vm: MainViewModel) {
             title = { Text("Remove ${entry.name}?") },
             text = { Text("This removes it from your list. The installed app (if any) is not uninstalled.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(modifier = Modifier.focusHighlight(), onClick = {
                     vm.delete(entry.id)
                     deleting = null
                 }) { Text("Remove") }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(modifier = Modifier.focusHighlight(), onClick = { deleting = null }) { Text("Cancel") } },
         )
     }
 
@@ -206,32 +223,42 @@ fun MainScreen(vm: MainViewModel) {
             title = { Text("Allow app installs") },
             text = {
                 Text(
-                    "To install APKs, allow \"App Downloader\" to install unknown apps. " +
-                        "On Fire TV this is under Settings › My Fire TV › Developer options › Install unknown apps."
+                    "To install APKs, allow App Downloader to install unknown apps.\n\n" +
+                        Device.installPermissionHelp(context)
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(modifier = Modifier.focusHighlight(), onClick = {
                     if (SystemActions.canInstallPackages(context)) {
                         pendingInstallId = null
-                        vm.install(id)
+                        startInstall(id)
                     } else if (!SystemActions.openInstallPermissionSettings(context)) {
                         vm.message("Could not open settings")
                     }
                 }) { Text(if (SystemActions.canInstallPackages(context)) "Continue" else "Open settings") }
             },
             dismissButton = {
-                TextButton(onClick = {
+                TextButton(modifier = Modifier.focusHighlight(), onClick = {
                     pendingInstallId = null
-                    vm.install(id) // The system may still prompt for permission itself.
+                    startInstall(id) // The system may still prompt for permission itself.
                 }) { Text("Try anyway") }
             },
+        )
+    }
+
+    selfUpdate?.let { update ->
+        SelfUpdateDialog(
+            update = update,
+            op = ops[AppController.SELF_UPDATE_ID],
+            onUpdate = { install(AppController.SELF_UPDATE_ID) },
+            onLater = vm::dismissSelfUpdate,
         )
     }
 
     if (showSettings) {
         SettingsDialog(
             current = settings,
+            onCheckSelfUpdate = vm::checkSelfUpdateNow,
             onDismiss = { showSettings = false },
             onSave = {
                 vm.saveSettings(it)
@@ -261,7 +288,7 @@ private fun EmptyState(modifier: Modifier, onAdd: () -> Unit) {
             modifier = Modifier.widthIn(max = 480.dp),
         )
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onAdd) {
+        Button(onClick = onAdd, modifier = Modifier.focusHighlight()) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text("Add an app")

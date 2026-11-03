@@ -25,6 +25,8 @@ data class GhRelease(
     val prerelease: Boolean = false,
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("html_url") val htmlUrl: String? = null,
+    /** Release notes (Markdown). */
+    val body: String? = null,
     val assets: List<GhAsset> = emptyList(),
 )
 

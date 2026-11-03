@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -30,12 +31,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.SettingsState
 
 @Composable
 fun SettingsDialog(
     current: SettingsState,
+    onCheckSelfUpdate: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (SettingsState) -> Unit,
 ) {
@@ -43,6 +46,7 @@ fun SettingsDialog(
     var token by rememberSaveable { mutableStateOf(current.githubToken) }
     var interval by rememberSaveable { mutableStateOf(current.checkIntervalHours) }
     var deleteAfter by rememberSaveable { mutableStateOf(current.deleteApkAfterInstall) }
+    var selfUpdates by rememberSaveable { mutableStateOf(current.checkSelfUpdates) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -54,6 +58,7 @@ fun SettingsDialog(
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .focusHighlight(FocusShapes.Row, scaleUp = false)
                             .selectable(selected = interval == hours, onClick = { interval = hours }, role = Role.RadioButton),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -77,9 +82,12 @@ fun SettingsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Delete APK after installing", Modifier.weight(1f))
-                    Switch(checked = deleteAfter, onCheckedChange = { deleteAfter = it })
+                SwitchRow("Delete APK after installing", deleteAfter) { deleteAfter = it }
+                HorizontalDivider()
+                Text("App Downloader ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleSmall)
+                SwitchRow("Check for App Downloader updates when opened", selfUpdates) { selfUpdates = it }
+                OutlinedButton(onClick = onCheckSelfUpdate, modifier = Modifier.focusHighlight()) {
+                    Text("Check for app update now")
                 }
                 HorizontalDivider()
                 val canInstall = SystemActions.canInstallPackages(context)
@@ -87,16 +95,49 @@ fun SettingsDialog(
                     if (canInstall) "Permission to install apps: granted" else "Permission to install apps: not granted",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedButton(onClick = { SystemActions.openInstallPermissionSettings(context) }) {
+                if (!canInstall) {
+                    Text(
+                        Device.installPermissionHelp(context),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(
+                    onClick = { SystemActions.openInstallPermissionSettings(context) },
+                    modifier = Modifier.focusHighlight(),
+                ) {
                     Text("Open install permission settings")
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onSave(SettingsState(githubToken = token, checkIntervalHours = interval, deleteApkAfterInstall = deleteAfter))
+            TextButton(modifier = Modifier.focusHighlight(), onClick = {
+                onSave(
+                    SettingsState(
+                        githubToken = token,
+                        checkIntervalHours = interval,
+                        deleteApkAfterInstall = deleteAfter,
+                        checkSelfUpdates = selfUpdates,
+                    )
+                )
             }) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Cancel") } },
     )
+}
+
+/** A label + switch where the whole row is one focusable, toggleable target (easier with a remote). */
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .focusHighlight(FocusShapes.Row, scaleUp = false)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, Modifier.weight(1f).padding(start = 4.dp, end = 8.dp))
+        Switch(checked = checked, onCheckedChange = null)
+    }
 }

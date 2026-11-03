@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -21,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -102,9 +105,15 @@ fun EntryDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = includePre, onCheckedChange = { includePre = it })
-                        Text("Include pre-releases")
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .focusHighlight(FocusShapes.Row, scaleUp = false)
+                            .toggleable(value = includePre, role = Role.Checkbox, onValueChange = { includePre = it }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = includePre, onCheckedChange = null)
+                        Text("Include pre-releases", Modifier.padding(start = 8.dp, top = 12.dp, bottom = 12.dp))
                     }
                 }
                 if (editing) {
@@ -121,12 +130,12 @@ fun EntryDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { error = onSubmit(form, false) }) { Text("Save") }
+                TextButton(onClick = { error = onSubmit(form, false) }, modifier = Modifier.focusHighlight()) { Text("Save") }
                 if (!editing) {
-                    Button(onClick = { error = onSubmit(form, true) }) { Text("Save & install") }
+                    Button(onClick = { error = onSubmit(form, true) }, modifier = Modifier.focusHighlight()) { Text("Save & install") }
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Cancel") } },
     )
 }

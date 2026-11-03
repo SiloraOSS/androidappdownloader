@@ -9,6 +9,7 @@ import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.data.VersionUtils
 import io.github.edrock200.appdownloader.install.ApkDownloader
+import io.github.edrock200.appdownloader.install.ApkInfo
 import io.github.edrock200.appdownloader.install.ApkInspector
 import io.github.edrock200.appdownloader.install.ApkInstaller
 import io.github.edrock200.appdownloader.install.InstalledApps
@@ -39,6 +40,14 @@ sealed interface OpState {
     data class Failed(val message: String, val openUrl: String? = null) : OpState
 }
 
+/** A newer release of App Downloader itself. */
+data class SelfUpdate(
+    val version: String,
+    val notes: String?,
+    val assetUrl: String,
+    val releaseUrl: String?,
+)
+
 /**
  * Application-wide coordinator for downloads, installs and GitHub update checks.
  * Lives as long as the process so work continues across configuration changes.
@@ -59,6 +68,11 @@ class AppController(
     val messages: SharedFlow<String> = _messages
 
     private val jobs = mutableMapOf<String, Job>()
+
+    companion object {
+        /** Operation id used for updating this app itself. */
+        const val SELF_UPDATE_ID = "self-update"
+    }
     private val apkDir get() = File(context.cacheDir, "apks")
 
     private fun setOp(id: String, state: OpState?) = _ops.update { if (state == null) it - id else it + (id to state) }
@@ -91,15 +105,7 @@ class AppController(
                 }
             }
 
-            setOp(entryId, OpState.Downloading(null))
-            val dir = apkDir
-            withContext(Dispatchers.IO) {
-                dir.listFiles { f -> f.name.startsWith(entryId) }?.forEach { it.delete() }
-            }
-            val result = ApkDownloader.download(url, dir, entryId) { p ->
-                setOp(entryId, OpState.Downloading(p))
-            }
-            val info = withContext(Dispatchers.IO) { ApkInspector.inspect(context, result.file) }
+            val info = downloadAndInspect(entryId, url)
 
             val previousPackage = entry.packageName
             if (previousPackage != null && previousPackage != info.packageName) {
@@ -114,9 +120,8 @@ class AppController(
                 )
             }
 
-            setOp(entryId, OpState.Installing)
             val tag = if (entry.type == SourceType.GITHUB) entry.latestTag else null
-            withContext(Dispatchers.IO) { ApkInstaller.install(context, result.file, info, entryId, tag) }
+            install(entryId, info, tag)
         } catch (e: CancellationException) {
             setOp(entryId, null)
             throw e
@@ -127,6 +132,28 @@ class AppController(
         } finally {
             jobs.remove(entryId)
         }
+    }
+
+    /** Downloads [url] for the operation [opId] and reads the package details. */
+    private suspend fun downloadAndInspect(opId: String, url: String): DownloadedApk {
+        setOp(opId, OpState.Downloading(null))
+        val dir = apkDir
+        withContext(Dispatchers.IO) {
+            dir.listFiles { f -> f.name.startsWith(opId) }?.forEach { it.delete() }
+        }
+        val result = ApkDownloader.download(url, dir, opId) { p -> setOp(opId, OpState.Downloading(p)) }
+        val info = withContext(Dispatchers.IO) { ApkInspector.inspect(context, result.file) }
+        return DownloadedApk(result.file, info)
+    }
+
+    private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?) {
+        setOp(opId, OpState.Installing)
+        withContext(Dispatchers.IO) { ApkInstaller.install(context, apk.file, apk.info, opId, releaseTag) }
+    }
+
+    private class DownloadedApk(val file: File, val info: ApkInfo) {
+        val packageName get() = info.packageName
+        val label get() = info.label
     }
 
     fun onInstallSucceeded(entryId: String, releaseTag: String?, versionCode: Long, filePath: String?) {
@@ -237,6 +264,75 @@ class AppController(
             val updated = checkGitHub(entry)
             setOp(entryId, null)
             updated.lastCheckError?.let { _messages.tryEmit("${updated.name}: $it") }
+        }
+    }
+
+    // ---------------------------------------------------------- self-update
+
+    private val _selfUpdate = MutableStateFlow<SelfUpdate?>(null)
+    /** A newer version of this app that the user hasn't dismissed yet. */
+    val selfUpdate: StateFlow<SelfUpdate?> = _selfUpdate.asStateFlow()
+
+    /** Called when the app is opened; checks only if the user hasn't turned it off. */
+    fun checkSelfUpdateOnLaunch() {
+        if (settings.current.checkSelfUpdates) scope.launch { checkSelfUpdate(manual = false) }
+    }
+
+    fun checkSelfUpdateNow() {
+        scope.launch { checkSelfUpdate(manual = true) }
+    }
+
+    private suspend fun checkSelfUpdate(manual: Boolean) {
+        val current = BuildConfig.VERSION_NAME
+        try {
+            val self = AppEntry(
+                name = "App Downloader",
+                type = SourceType.GITHUB,
+                source = BuildConfig.UPDATE_REPO,
+                assetFilter = "^AppDownloader.*\\.apk$",
+            )
+            val match = GitHubClient.findLatest(self, settings.current.githubToken, Build.SUPPORTED_ABIS.toList())
+            val latest = match.release.tagName
+            if ((VersionUtils.compare(latest, current) ?: 0) > 0) {
+                _selfUpdate.value = SelfUpdate(
+                    version = latest.removePrefix("v"),
+                    notes = match.release.body?.substringBefore("## How to install")?.trim()?.ifBlank { null },
+                    assetUrl = match.asset.downloadUrl,
+                    releaseUrl = match.release.htmlUrl,
+                )
+            } else if (manual) {
+                _messages.tryEmit("App Downloader is up to date (version $current)")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (manual) _messages.tryEmit("Couldn't check for app updates: ${e.message}")
+        }
+    }
+
+    fun dismissSelfUpdate() {
+        _selfUpdate.value = null
+        clearOp(SELF_UPDATE_ID)
+    }
+
+    fun installSelfUpdate() {
+        val update = _selfUpdate.value ?: return
+        if (jobs[SELF_UPDATE_ID]?.isActive == true) return
+        jobs[SELF_UPDATE_ID] = scope.launch {
+            try {
+                val apk = downloadAndInspect(SELF_UPDATE_ID, update.assetUrl)
+                if (apk.packageName != context.packageName) {
+                    throw IOException("The downloaded file is not an App Downloader update")
+                }
+                install(SELF_UPDATE_ID, apk, "v${update.version}")
+            } catch (e: CancellationException) {
+                setOp(SELF_UPDATE_ID, null)
+                throw e
+            } catch (e: Exception) {
+                setOp(SELF_UPDATE_ID, OpState.Failed(e.message ?: e.javaClass.simpleName))
+            } finally {
+                jobs.remove(SELF_UPDATE_ID)
+            }
         }
     }
 

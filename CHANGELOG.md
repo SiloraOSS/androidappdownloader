@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0]
+
+### Added
+- App Downloader now checks for its own updates when you open it and offers to install them.
+  You can turn this off in Settings, or check right away with "Check for app update now".
+- Settings shows which version of App Downloader you have.
+
+### Changed
+- Much easier to use with a TV remote: the selected button is outlined and slightly enlarged,
+  and the app you're on is outlined too.
+- Extra space around the edges on TVs, so nothing gets cut off.
+- Clearer help for allowing installs on Android TV and Google TV, not just Fire TV.
+- Options that need a web browser are hidden on TVs that don't have one.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added

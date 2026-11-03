@@ -43,6 +43,10 @@ All code lives in `app/src/main/java/io/github/edrock200/appdownloader/`:
 | `install/ApkInstaller.kt` | `PackageInstaller` session install; result goes to `InstallResultReceiver`. |
 | `work/` | WorkManager periodic update check, scheduler, notifications. |
 | `ui/` | `MainActivity`, `MainViewModel`, Compose screens and dialogs, `SystemActions` (intents to the system). |
+| `ui/Tv.kt` | `Modifier.focusHighlight()` (remote-friendly focus ring), `Device.isTv/isFireTv`, per-device install-permission help. |
+| `ui/SelfUpdateDialog.kt` | Prompt shown when a newer App Downloader release exists. |
+| `.github/workflows/android.yml` | CI: tests, builds, signs, publishes tagged releases, announces on Discord. |
+| `.github/scripts/` | `release-notes.sh` (CHANGELOG section → plain-language notes), `discord-notify.sh`. |
 
 Unit tests are in `app/src/test/...` and cover the pure logic only.
 
@@ -59,6 +63,16 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   `versionName`. Not installed → "Install", never "Update".
 - **Background checks:** `UpdateCheckWorker` → `checkAllGitHub()` → notify for entries whose
   `notifiedTag != latestTag`.
+- **Self-update:** `MainActivity.onCreate` (fresh start only) → `controller.checkSelfUpdateOnLaunch()`
+  (skipped when the *checkSelfUpdates* setting is off) looks up `BuildConfig.UPDATE_REPO`'s releases
+  for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one
+  sets `controller.selfUpdate`, shown by `SelfUpdateDialog`; installing it reuses the download/install
+  pipeline under the op id `AppController.SELF_UPDATE_ID` and refuses APKs with another package name.
+- **Releases:** pushing tag `vX.Y.Z` runs the workflow, which sets `APP_VERSION_NAME` (versionCode =
+  X*10000 + Y*100 + Z, computed in `app/build.gradle.kts`), signs with the `SIGNING_*` secrets,
+  publishes the release with the fixed asset name `AppDownloader.apk`, and posts to the
+  `DISCORD_WEBHOOK` secret (aftv code from the `AFTV_CODE` repository variable). Stable download link:
+  `https://github.com/edrock200/androidappdownloader/releases/latest/download/AppDownloader.apk`.
 
 ## Conventions and gotchas
 
@@ -70,7 +84,10 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   (see `GitHubClient.pickRelease`, `ApkInspector.selectSplits` with an explicit `supportedAbis`).
 - **Unit tests must not hit the network.** Use recorded fixtures (see `GitHubReleaseTest`).
 - **TV / D-pad:** every action must be reachable without touch — use standard focusable Material
-  components (buttons, menus), no gesture-only or long-press-only actions.
+  components (buttons, menus), no gesture-only or long-press-only actions. Give every clickable
+  control `Modifier.focusHighlight(...)` (pass `FocusShapes.Row, scaleUp = false` for rows and menu
+  items). Make label+switch/checkbox rows a single `toggleable` row. Hide browser-only actions when
+  `SystemActions.hasBrowser()` is false, and use `Device.installPermissionHelp()` for permission text.
 - **Adding a field to `AppEntry`:** give it a default value so existing `entries.json` files still
   load (`ignoreUnknownKeys` covers removed fields, defaults cover new ones).
 - **Persistence changes go through `EntryRepository.update/add/delete`**, never by mutating the flow.
@@ -83,8 +100,12 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - Don't commit keystores or `local.properties`. Release signing is configured via `SIGNING_*`
   environment variables (see README). The only committed APKs are the signed release builds in
   `releases/`; never put a debug-signed APK there, because a different key breaks in-place updates.
-- Record user-visible changes in `CHANGELOG.md` under *Unreleased*, and bump `versionCode` /
-  `versionName` in `app/build.gradle.kts` when releasing.
+- Record user-visible changes in `CHANGELOG.md` under *Unreleased*, written in plain language for
+  non-technical users — the section becomes the release notes and the Discord announcement. When
+  releasing, rename it to `## [X.Y.Z]` and tag `vX.Y.Z`. Don't edit versionCode/versionName by hand
+  (they come from the tag); only update the local-build default in `app/build.gradle.kts`.
+- Never rename the release asset `AppDownloader.apk`: the "latest" download link, the aftv.news code
+  and in-app self-update all depend on it.
 
 ## Not covered by tests
 

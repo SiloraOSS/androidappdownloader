@@ -1,5 +1,6 @@
 package io.github.edrock200.appdownloader.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -56,9 +58,18 @@ fun EntryCard(
     val installed = item.installed
     val op = item.op
     val busy = op != null && op !is OpState.Failed
+    val hasBrowser = remember { SystemActions.hasBrowser(context) }
+    // Outline the whole card while any of its buttons is selected, so TV users can see which app they're on.
+    var cardFocused by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { cardFocused = it.hasFocus }
+            .then(
+                if (cardFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
+                else Modifier
+            ),
         colors = if (item.hasUpdate) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
         } else {
@@ -156,8 +167,8 @@ fun EntryCard(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     when {
-                        busy -> OutlinedButton(onClick = onCancel) { Text(if (op == OpState.Installing) "Dismiss" else "Cancel") }
-                        else -> Button(onClick = onInstall) {
+                        busy -> OutlinedButton(onClick = onCancel, modifier = Modifier.focusHighlight()) { Text(if (op == OpState.Installing) "Dismiss" else "Cancel") }
+                        else -> Button(onClick = onInstall, modifier = Modifier.focusHighlight()) {
                             Text(
                                 when {
                                     item.hasUpdate -> "Update to ${entry.latestTag}"
@@ -173,15 +184,18 @@ fun EntryCard(
                     if (installed != null && entry.packageName != null && !busy &&
                         SystemActions.canLaunch(context, entry.packageName)
                     ) {
-                        OutlinedButton(onClick = { SystemActions.launchApp(context, entry.packageName) }) { Text("Open") }
+                        OutlinedButton(
+                            onClick = { SystemActions.launchApp(context, entry.packageName) },
+                            modifier = Modifier.focusHighlight(),
+                        ) { Text("Open") }
                     }
                     if (op is OpState.Failed) {
-                        op.openUrl?.let { url ->
-                            TextButton(onClick = {
+                        op.openUrl?.takeIf { hasBrowser }?.let { url ->
+                            TextButton(modifier = Modifier.focusHighlight(), onClick = {
                                 if (!SystemActions.openUrl(context, url)) onMessage("No browser available")
                             }) { Text("Open in browser") }
                         }
-                        TextButton(onClick = onCancel) { Text("Dismiss") }
+                        TextButton(onClick = onCancel, modifier = Modifier.focusHighlight()) { Text("Dismiss") }
                     }
                 }
             }
@@ -200,33 +214,37 @@ private fun OverflowMenu(
     val context = LocalContext.current
     val entry = item.entry
     var open by remember { mutableStateOf(false) }
+    val hasBrowser = remember { SystemActions.hasBrowser(context) }
+    val itemModifier = Modifier.focusHighlight(FocusShapes.Row, scaleUp = false)
     Box {
-        IconButton(onClick = { open = true }) {
+        IconButton(onClick = { open = true }, modifier = Modifier.focusHighlight(FocusShapes.Icon)) {
             Icon(Icons.Filled.MoreVert, contentDescription = "More options")
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (entry.type == SourceType.GITHUB) {
-                DropdownMenuItem(text = { Text("Check for update") }, onClick = { open = false; onCheck() })
-                DropdownMenuItem(text = { Text("Open release page") }, onClick = {
+                DropdownMenuItem(text = { Text("Check for update") }, modifier = itemModifier, onClick = { open = false; onCheck() })
+            }
+            if (entry.type == SourceType.GITHUB && hasBrowser) {
+                DropdownMenuItem(text = { Text("Open release page") }, modifier = itemModifier, onClick = {
                     open = false
                     val url = entry.latestReleaseUrl ?: "https://github.com/${entry.source}/releases"
                     if (!SystemActions.openUrl(context, url)) onMessage("No browser available")
                 })
-            } else {
-                DropdownMenuItem(text = { Text("Open link in browser") }, onClick = {
+            } else if (hasBrowser) {
+                DropdownMenuItem(text = { Text("Open link in browser") }, modifier = itemModifier, onClick = {
                     open = false
                     val url = if (entry.type == SourceType.AFTV_CODE) AftvResolver.shortUrl(entry.source) else entry.source
                     if (!SystemActions.openUrl(context, url)) onMessage("No browser available")
                 })
             }
-            DropdownMenuItem(text = { Text("Edit") }, onClick = { open = false; onEdit() })
+            DropdownMenuItem(text = { Text("Edit") }, modifier = itemModifier, onClick = { open = false; onEdit() })
             if (item.installed != null && entry.packageName != null) {
-                DropdownMenuItem(text = { Text("Uninstall app") }, onClick = {
+                DropdownMenuItem(text = { Text("Uninstall app") }, modifier = itemModifier, onClick = {
                     open = false
                     if (!SystemActions.uninstall(context, entry.packageName)) onMessage("Could not open uninstaller")
                 })
             }
-            DropdownMenuItem(text = { Text("Remove from list") }, onClick = { open = false; onDelete() })
+            DropdownMenuItem(text = { Text("Remove from list") }, modifier = itemModifier, onClick = { open = false; onDelete() })
         }
     }
 }

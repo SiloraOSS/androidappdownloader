@@ -17,13 +17,21 @@ installing them in one tap. It understands three kinds of sources:
 - Installs plain `.apk` files and split bundles (`.xapk`, `.apks`) through Android's PackageInstaller.
 - Open, uninstall, re-download or edit any saved app; share a link from another app to add it.
 - Optional GitHub personal access token (Settings) to raise the API rate limit from 60 to 5,000 requests/hour and to reach private repositories.
-- Works with a D-pad remote on Fire TV / Android TV (appears in the TV launcher).
+- Built for TV remotes on Fire TV, Android TV and Google TV: it appears in the TV launcher, the
+  selected button is clearly outlined, there's extra margin for TV overscan, and options that need a
+  web browser are hidden on TVs without one.
+- Keeps itself up to date: when opened it checks this repository for a newer version and offers to
+  install it. This can be turned off in Settings.
 
 ## Install
 
-Download the signed APK from the [`releases/`](releases/) folder of this repository
-(currently [`AppDownloader-v1.0.0.apk`](releases/AppDownloader-v1.0.0.apk), SHA-256 in the
-matching `.sha256` file) or from the GitHub Releases page, and sideload it.
+The latest version is always at this link:
+
+**https://github.com/edrock200/androidappdownloader/releases/latest/download/AppDownloader.apk**
+
+On a Fire TV or Android TV, enter that link (or its aftv.news code) in the *Downloader* app. Each
+release is also listed on the [Releases page](https://github.com/edrock200/androidappdownloader/releases).
+The very first build (1.0.0) is in the [`releases/`](releases/) folder.
 
 Release APKs are signed with a single key, certificate SHA-256
 `F9:11:E3:37:FE:B1:1B:96:BD:B6:8F:06:96:F9:BE:CC:48:E6:BB:BD:66:D2:CE:9D:03:25:D6:1B:16:B5:9A:D4`.
@@ -58,6 +66,7 @@ so the installed version is tracked.
 | Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
 | GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |
 | Delete APK after installing | on | Downloaded files are kept in the app's cache otherwise |
+| Check for App Downloader updates when opened | on | Offers to install a newer version of this app. *Check for app update now* checks immediately. |
 
 ### Troubleshooting
 
@@ -68,6 +77,8 @@ so the installed version is tracked.
 | *No APK for this device in the latest releases* | The repo has no build for your CPU, or the filter excludes everything. Adjust the filter. |
 | *Conflicts with the installed app* | The installed copy is signed with a different key. Uninstall it, then install again. |
 | Install prompt never appears on Fire TV | Allow installs under Settings › My Fire TV › Developer options › Install unknown apps. |
+| Install prompt never appears on Android TV / Google TV | Allow installs under Settings › Apps › Security & restrictions › Unknown sources (older models: Settings › Device Preferences › Security & restrictions). |
+| No update notifications on a TV | Many TV launchers don't show notifications. Apps with updates are highlighted at the top of the list when you open the app. |
 
 ## Building
 
@@ -90,8 +101,25 @@ base64 -w0 release.jks   # value for SIGNING_KEYSTORE_BASE64
 
 Then add the repository secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`,
 `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`. Without them, CI signs branch builds with a
-throw-away debug key and refuses to publish tagged releases. Once the secrets are set, pushing a tag
-such as `v1.0.0` builds the APK and attaches it to a GitHub release.
+throw-away debug key and refuses to publish tagged releases.
+
+### Publishing a release
+
+1. Describe the changes in plain language in `CHANGELOG.md` under a heading such as `## [1.2.0]`.
+   This text becomes the release notes and the Discord announcement.
+2. Push a tag with the same version: `git tag v1.2.0 && git push origin v1.2.0`.
+
+The version comes from the tag: `v1.2.3` becomes versionName `1.2.3` and versionCode `10203`, so
+there is nothing to edit in Gradle. Minor and patch numbers must stay below 100.
+
+The workflow then tests and builds the app, signs it, publishes a GitHub release with
+`AppDownloader.apk` (the asset name never changes, so the "latest" link above always works), and
+announces it on Discord.
+
+| Repository setting | Kind | Purpose |
+|---|---|---|
+| `DISCORD_WEBHOOK` | Secret | Discord channel webhook URL for release announcements (skipped if unset) |
+| `AFTV_CODE` | Variable | aftv.news code pointing at the "latest" link; included in release notes and the announcement |
 
 Locally, set the same variables (with `SIGNING_KEYSTORE_FILE` pointing at the `.jks`) before running
 `./gradlew assembleRelease`.
@@ -116,7 +144,9 @@ app/src/main/java/io/github/edrock200/appdownloader/
 ├── net/                       # OkHttp client, aftv.news resolver, GitHub API, asset selection
 ├── install/                   # downloader, APK inspector, PackageInstaller session + receiver
 ├── work/                      # WorkManager update checks and notifications
-└── ui/                        # Compose screens, dialogs, ViewModel, theme
+└── ui/                        # Compose screens, dialogs, ViewModel, theme, TV helpers
+.github/workflows/android.yml  # CI build, signed releases, Discord announcement
+.github/scripts/               # release-notes.sh, discord-notify.sh
 ```
 
 See [CLAUDE.md](CLAUDE.md) for a deeper tour and [CONTRIBUTING.md](CONTRIBUTING.md) for how to

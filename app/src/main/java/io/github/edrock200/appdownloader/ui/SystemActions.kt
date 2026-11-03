@@ -43,6 +43,10 @@ object SystemActions {
     fun uninstall(context: Context, packageName: String): Boolean =
         start(context, Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")))
 
+    /** Many TV devices have no web browser installed. */
+    fun hasBrowser(context: Context): Boolean =
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).resolveActivity(context.packageManager) != null
+
     fun openUrl(context: Context, url: String): Boolean =
         start(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 

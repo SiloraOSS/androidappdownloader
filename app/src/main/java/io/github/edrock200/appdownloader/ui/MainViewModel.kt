@@ -51,6 +51,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val checking = app.controller.checking
+    val ops = app.controller.ops
+    val selfUpdate = app.controller.selfUpdate
     val settings = app.settings.state
     val messages = app.controller.messages
 
@@ -135,6 +137,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun checkOne(id: String) = app.controller.checkOne(id)
     fun checkAll() = app.controller.checkAllNow()
     fun message(text: String) = app.controller.message(text)
+    fun checkSelfUpdateOnLaunch() = app.controller.checkSelfUpdateOnLaunch()
+    fun checkSelfUpdateNow() = app.controller.checkSelfUpdateNow()
+    fun installSelfUpdate() = app.controller.installSelfUpdate()
+    fun dismissSelfUpdate() = app.controller.dismissSelfUpdate()
 
     fun saveSettings(state: SettingsState) {
         val old = app.settings.current
