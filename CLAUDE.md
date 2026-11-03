@@ -68,7 +68,8 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one
   sets `controller.selfUpdate`, shown by `SelfUpdateDialog`; installing it reuses the download/install
   pipeline under the op id `AppController.SELF_UPDATE_ID` and refuses APKs with another package name.
-- **Releases:** pushing tag `vX.Y.Z` runs the workflow, which sets `APP_VERSION_NAME` (versionCode =
+- **Releases:** running the workflow manually with input `version: X.Y.Z` (or pushing tag `vX.Y.Z`)
+  sets `APP_VERSION_NAME` (versionCode =
   X*10000 + Y*100 + Z, computed in `app/build.gradle.kts`), signs with the `SIGNING_*` secrets,
   publishes the release with the fixed asset name `AppDownloader.apk`, and posts to the
   `DISCORD_WEBHOOK` secret (aftv.news code `9697744`, overridable with the `AFTV_CODE` repository variable). Stable download link:

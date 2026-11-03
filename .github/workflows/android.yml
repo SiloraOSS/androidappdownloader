@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.2.0 (publishes it and announces on Discord). Leave empty for a test build."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -27,15 +32,30 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Read version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      # A release is either a pushed v1.2.3 tag, or "Run workflow" with a version entered.
+      - name: Determine release version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if ! [[ "$tag" =~ ^v([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})$ ]]; then
-            echo "::error::Release tags must look like v1.2.3 (minor and patch below 100), got $tag"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [ -n "$INPUT_VERSION" ]; then
+            version="${INPUT_VERSION#v}"
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+              echo "::error::v$version already exists. Choose a higher version."
+              exit 1
+            fi
+          else
+            echo "Not a release; building only."
+            exit 0
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+            echo "::error::Versions must look like 1.2.3 (minor and patch below 100), got $version"
             exit 1
           fi
-          echo "APP_VERSION_NAME=${tag#v}" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "IS_RELEASE=true" >> "$GITHUB_ENV"
+          echo "Releasing version $version"
 
       # Sign with the project's release key so installed copies can be updated in place.
       # Repository secrets: SIGNING_KEYSTORE_BASE64, SIGNING_KEYSTORE_PASSWORD,
@@ -51,9 +71,9 @@ jobs:
       # A release signed with a throw-away key could not update installed copies,
       # so refuse to publish one.
       - name: Require release signing key for tagged releases
-        if: startsWith(github.ref, 'refs/tags/v') && env.SIGNING_KEYSTORE_FILE == ''
+        if: env.IS_RELEASE == 'true' && env.SIGNING_KEYSTORE_FILE == ''
         run: |
-          echo "::error::Tagged releases need the SIGNING_* repository secrets (see README)."
+          echo "::error::Releases need the SIGNING_* repository secrets (see README)."
           exit 1
 
       - name: Test and build
@@ -75,7 +95,7 @@ jobs:
           path: dist/*.apk
 
       - name: Write release notes
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.IS_RELEASE == 'true'
         env:
           AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}
         run: |
@@ -93,16 +113,18 @@ jobs:
 
       - name: Publish GitHub release
         id: release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.IS_RELEASE == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.APP_VERSION_NAME }}
+          target_commitish: ${{ github.sha }}
           name: App Downloader ${{ env.APP_VERSION_NAME }}
           body_path: ${{ runner.temp }}/release-body.md
           files: dist/AppDownloader.apk
           make_latest: true
 
       - name: Announce on Discord
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.IS_RELEASE == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}

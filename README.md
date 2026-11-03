@@ -108,9 +108,10 @@ throw-away debug key and refuses to publish tagged releases.
 
 1. Describe the changes in plain language in `CHANGELOG.md` under a heading such as `## [1.2.0]`.
    This text becomes the release notes and the Discord announcement.
-2. Push a tag with the same version: `git tag v1.2.0 && git push origin v1.2.0`.
+2. On GitHub, open **Actions › Android build › Run workflow**, enter the version (e.g. `1.2.0`)
+   and click **Run workflow**. Pushing a tag (`git tag v1.2.0 && git push origin v1.2.0`) does the same.
 
-The version comes from the tag: `v1.2.3` becomes versionName `1.2.3` and versionCode `10203`, so
+The version comes from what you enter (or the tag): `v1.2.3` becomes versionName `1.2.3` and versionCode `10203`, so
 there is nothing to edit in Gradle. Minor and patch numbers must stay below 100.
 
 The workflow then tests and builds the app, signs it, publishes a GitHub release with
