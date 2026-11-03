@@ -28,6 +28,41 @@ apps — on Fire TV that is **Settings › My Fire TV › Developer options › 
 Tip: add `https://github.com/edrock200/androidappdownloader` inside the app and it will keep itself
 up to date.
 
+## Using the app
+
+1. Tap **Add** (or **Add an app** on the empty screen).
+2. Enter a link, an aftv.news code or a GitHub repository. The field tells you which one it detected.
+   - Leave **Name** blank to use the app's own name once it's downloaded.
+   - For GitHub repos you can set an **APK file filter** (when a release has several APKs) and
+     choose to **include pre-releases**.
+3. Tap **Save & install**, or **Save** to install later. Accept Android's install prompt.
+
+Each saved app shows its installed version and, for GitHub repos, the latest release. Cards with an
+update are highlighted and sorted to the top; tap **Update to vX.Y** to install it. Use the
+⟳ button in the top bar to check all GitHub repos now, and the ⋮ menu on a card for *Check for
+update*, *Open release page / link*, *Edit*, *Uninstall app* and *Remove from list*.
+
+If you installed an app some other way, open **Edit** on its entry and fill in its **package name**
+so the installed version is tracked.
+
+### Settings
+
+| Setting | Default | Notes |
+|---|---|---|
+| Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
+| GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |
+| Delete APK after installing | on | Downloaded files are kept in the app's cache otherwise |
+
+### Troubleshooting
+
+| Message | Fix |
+|---|---|
+| *This link opens a web page, not an APK file* | The page had no `.apk` link. Use *Open in browser* to find the direct link and add that instead. |
+| *GitHub rate limit reached* | Add a GitHub token in Settings. |
+| *No APK for this device in the latest releases* | The repo has no build for your CPU, or the filter excludes everything. Adjust the filter. |
+| *Conflicts with the installed app* | The installed copy is signed with a different key. Uninstall it, then install again. |
+| Install prompt never appears on Fire TV | Allow installs under Settings › My Fire TV › Developer options › Install unknown apps. |
+
 ## Building
 
 Requires JDK 17+ and the Android SDK (platform 35).
@@ -64,6 +99,21 @@ Locally, set the same variables (with `SIGNING_KEYSTORE_FILE` pointing at the `.
   The installed app is matched by package name, learned from the first APK the app downloads (or set
   manually under *Edit*).
 - Entries are stored as JSON in the app's private storage; background checks use WorkManager.
+
+## Project structure
+
+```
+app/src/main/java/io/github/edrock200/appdownloader/
+├── App.kt, AppController.kt   # singletons + download/install/update-check coordinator
+├── data/                      # AppEntry model, JSON repository, settings, input & version parsing
+├── net/                       # OkHttp client, aftv.news resolver, GitHub API, asset selection
+├── install/                   # downloader, APK inspector, PackageInstaller session + receiver
+├── work/                      # WorkManager update checks and notifications
+└── ui/                        # Compose screens, dialogs, ViewModel, theme
+```
+
+See [CLAUDE.md](CLAUDE.md) for a deeper tour and [CONTRIBUTING.md](CONTRIBUTING.md) for how to
+contribute. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Permissions
 
