@@ -29,7 +29,8 @@ The latest version is always at this link:
 
 **https://github.com/edrock200/androidappdownloader/releases/latest/download/AppDownloader.apk**
 
-On a Fire TV or Android TV, enter that link (or its aftv.news code) in the *Downloader* app. Each
+On a Fire TV or Android TV, open the *Downloader* app and enter code **9697744**
+(or go to [aftv.news/9697744](http://aftv.news/9697744)). Each
 release is also listed on the [Releases page](https://github.com/edrock200/androidappdownloader/releases).
 The very first build (1.0.0) is in the [`releases/`](releases/) folder.
 
@@ -119,7 +120,7 @@ announces it on Discord.
 | Repository setting | Kind | Purpose |
 |---|---|---|
 | `DISCORD_WEBHOOK` | Secret | Discord channel webhook URL for release announcements (skipped if unset) |
-| `AFTV_CODE` | Variable | aftv.news code pointing at the "latest" link; included in release notes and the announcement |
+| `AFTV_CODE` | Variable (optional) | Overrides the aftv.news code shown in release notes and the announcement. Defaults to `9697744`, which points at the "latest" link. |
 
 Locally, set the same variables (with `SIGNING_KEYSTORE_FILE` pointing at the `.jks`) before running
 `./gradlew assembleRelease`.

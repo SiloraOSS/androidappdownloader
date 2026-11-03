@@ -77,7 +77,7 @@ jobs:
       - name: Write release notes
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          AFTV_CODE: ${{ vars.AFTV_CODE }}
+          AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}
         run: |
           .github/scripts/release-notes.sh "$APP_VERSION_NAME" > "$RUNNER_TEMP/notes.md"
           {
@@ -105,7 +105,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          AFTV_CODE: ${{ vars.AFTV_CODE }}
+          AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}
           VERSION: ${{ env.APP_VERSION_NAME }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
           DOWNLOAD_URL: ${{ env.LATEST_APK_URL }}

@@ -71,7 +71,7 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - **Releases:** pushing tag `vX.Y.Z` runs the workflow, which sets `APP_VERSION_NAME` (versionCode =
   X*10000 + Y*100 + Z, computed in `app/build.gradle.kts`), signs with the `SIGNING_*` secrets,
   publishes the release with the fixed asset name `AppDownloader.apk`, and posts to the
-  `DISCORD_WEBHOOK` secret (aftv code from the `AFTV_CODE` repository variable). Stable download link:
+  `DISCORD_WEBHOOK` secret (aftv.news code `9697744`, overridable with the `AFTV_CODE` repository variable). Stable download link:
   `https://github.com/edrock200/androidappdownloader/releases/latest/download/AppDownloader.apk`.
 
 ## Conventions and gotchas
