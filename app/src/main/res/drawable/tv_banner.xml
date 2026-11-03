@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="320dp" android:height="180dp" />
+            <gradient
+                android:angle="315"
+                android:endColor="@color/brand_dark"
+                android:startColor="@color/brand" />
+        </shape>
+    </item>
+    <item
+        android:bottom="30dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="100dp"
+        android:right="100dp"
+        android:top="30dp" />
+</layer-list>
