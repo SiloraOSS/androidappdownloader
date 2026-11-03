@@ -80,8 +80,9 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   snackbar via `controller.message(...)`; keep them actionable ("Add a token in Settings").
 - Dependencies are declared in `gradle/libs.versions.toml`; avoid adding libraries for things the
   platform/OkHttp/kotlinx.serialization already cover. Avoid `material-icons-extended` (APK size).
-- Don't commit keystores, `local.properties` or APKs. Release signing is configured via
-  `SIGNING_*` environment variables (see README).
+- Don't commit keystores or `local.properties`. Release signing is configured via `SIGNING_*`
+  environment variables (see README). The only committed APKs are the signed release builds in
+  `releases/`; never put a debug-signed APK there, because a different key breaks in-place updates.
 - Record user-visible changes in `CHANGELOG.md` under *Unreleased*, and bump `versionCode` /
   `versionName` in `app/build.gradle.kts` when releasing.
 

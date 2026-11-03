@@ -21,8 +21,14 @@ installing them in one tap. It understands three kinds of sources:
 
 ## Install
 
-Download `AppDownloader.apk` from this repository's Releases (or the latest *Android build* workflow
-run's artifacts) and sideload it. On first install you will be asked to allow it to install unknown
+Download the signed APK from the [`releases/`](releases/) folder of this repository
+(currently [`AppDownloader-v1.0.0.apk`](releases/AppDownloader-v1.0.0.apk), SHA-256 in the
+matching `.sha256` file) or from the GitHub Releases page, and sideload it.
+
+Release APKs are signed with a single key, certificate SHA-256
+`F9:11:E3:37:FE:B1:1B:96:BD:B6:8F:06:96:F9:BE:CC:48:E6:BB:BD:66:D2:CE:9D:03:25:D6:1B:16:B5:9A:D4`.
+If you installed an earlier debug build, uninstall it first, because Android won't update an app
+signed with a different key. On first install you will be asked to allow it to install unknown
 apps — on Fire TV that is **Settings › My Fire TV › Developer options › Install unknown apps**.
 
 Tip: add `https://github.com/edrock200/androidappdownloader` inside the app and it will keep itself
@@ -83,8 +89,9 @@ base64 -w0 release.jks   # value for SIGNING_KEYSTORE_BASE64
 ```
 
 Then add the repository secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`,
-`SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`. Without them, CI signs release builds with a
-throw-away debug key. Pushing a tag such as `v1.0.0` builds the APK and attaches it to a GitHub release.
+`SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD`. Without them, CI signs branch builds with a
+throw-away debug key and refuses to publish tagged releases. Once the secrets are set, pushing a tag
+such as `v1.0.0` builds the APK and attaches it to a GitHub release.
 
 Locally, set the same variables (with `SIGNING_KEYSTORE_FILE` pointing at the `.jks`) before running
 `./gradlew assembleRelease`.

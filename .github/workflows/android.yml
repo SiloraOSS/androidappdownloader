@@ -52,6 +52,14 @@ jobs:
           name: AppDownloader-apks
           path: dist/*.apk
 
+      # A release signed with a throw-away key could not update installed copies,
+      # so refuse to publish one.
+      - name: Require release signing key for tagged releases
+        if: startsWith(github.ref, 'refs/tags/v') && env.SIGNING_KEYSTORE_FILE == ''
+        run: |
+          echo "::error::Tagged releases need the SIGNING_* repository secrets (see README)."
+          exit 1
+
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
