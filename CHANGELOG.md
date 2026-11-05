@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-05
+
 ### Added
 - Plain links and aftv.news codes now show whether the file on the website has changed since
   you installed it ("Changed on the website" / "No change"), checked without downloading it.

@@ -64,8 +64,8 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - **Update detection:** `VersionUtils.hasUpdate`. If the installed version code equals the one we
   installed, compare release tags; otherwise compare the tag's numbers with the installed
   `versionName`. Not installed → "Install", never "Update".
-- **Background checks:** `UpdateCheckWorker` → `checkAllGitHub()` → notify for entries whose
-  `notifiedTag != latestTag`.
+- **Background checks:** `UpdateCheckWorker` → `checkAll()` → notify for GitHub entries whose
+  `notifiedTag != latestTag` and links whose `notifiedChangeKey != remoteFingerprint.key`.
 - **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`) lives in `Settings` and is
   saved immediately by `MainViewModel.setSchedule`, which (re)enqueues a one-time WorkManager job.
   `AutoUpdateWorker` calls `controller.updateSelected(interactive = false)`, then computes the next run
