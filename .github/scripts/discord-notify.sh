@@ -12,10 +12,13 @@ if [ "${#notes}" -gt 2500 ]; then
 Full details: ${RELEASE_URL}"
 fi
 
-how="**How to get it**"
+# Works on every Android device: phones, tablets, Fire TV and Android TV.
+how="**How to get it** (Android phones, tablets, Fire TV and Android TV)"
 if [ -n "${AFTV_CODE:-}" ]; then
-  how+=$'\n'"📺 **Fire TV / Android TV:** open the **Downloader** app and enter code **${AFTV_CODE}**"
-  how+=$'\n'"🔗 **Short link:** https://aftv.news/${AFTV_CODE}"
+  how+=$'\n'"📱 **Phone or tablet:** open https://aftv.news/${AFTV_CODE} in your browser and install the download"
+  how+=$'\n'"📺 **TV:** open the **Downloader** app and enter code **${AFTV_CODE}**"
+else
+  how+=$'\n'"📱 **Phone or tablet:** open the direct download link below in your browser and install it"
 fi
 how+=$'\n'"⬇️ **Direct download:** ${DOWNLOAD_URL}"
 

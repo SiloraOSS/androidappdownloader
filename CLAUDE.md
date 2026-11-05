@@ -140,6 +140,10 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   non-technical users — the section becomes the release notes and the Discord announcement. When
   releasing, rename it to `## [X.Y.Z]` and tag `vX.Y.Z`. Don't edit versionCode/versionName by hand
   (they come from the tag); only update the local-build default in `app/build.gradle.kts`.
+- Release notes and the Discord announcement are for everyone, not just TV users: the app runs on
+  Android phones and tablets as well as Fire TV / Android TV, so install instructions must cover both
+  (see `.github/scripts/discord-notify.sh` and the "Write release notes" workflow step). Only publish
+  a release (which posts to Discord) when the user asks for one.
 - Never rename the release asset `AppDownloader.apk`: the "latest" download link, the aftv.news code
   and in-app self-update all depend on it.
 

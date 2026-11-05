@@ -104,8 +104,10 @@ jobs:
             cat "$RUNNER_TEMP/notes.md"
             echo
             echo "## How to install"
+            echo "Works on Android phones, tablets, Fire TV and Android TV."
             if [ -n "$AFTV_CODE" ]; then
-              echo "- **Fire TV / Android TV:** in the Downloader app, enter code **$AFTV_CODE** (or open https://aftv.news/$AFTV_CODE)"
+              echo "- **Phone or tablet:** open https://aftv.news/$AFTV_CODE in your browser and install the download"
+              echo "- **TV:** in the Downloader app, enter code **$AFTV_CODE**"
             fi
             echo "- **Direct download (always the latest version):** $LATEST_APK_URL"
             echo "- Already installed? Open App Downloader and it will offer the update."
