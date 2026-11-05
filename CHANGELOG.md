@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-05
+
 ### Added
 - Opening App Downloader now checks every app in your list for a new version.
 - Apps with an update get a gold star, and their button changes to "Update".
