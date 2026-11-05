@@ -26,6 +26,19 @@ class SelfUpdateTest {
     }
 
     @Test
+    fun autoCheckRunsOnEveryLaunchButNotTooOften() {
+        val min = SelfUpdatePolicy.MIN_INTERVAL_MS
+        fun check(enabled: Boolean = true, offered: Boolean = false, running: Boolean = false, last: Long = 0, now: Long = 10 * min) =
+            SelfUpdatePolicy.shouldAutoCheck(enabled, offered, running, last, now)
+        assertEquals(true, check()) // First launch.
+        assertEquals(true, check(last = 8 * min)) // Reopened later: checks again.
+        assertEquals(false, check(last = 10 * min - 1000)) // Reopened a moment after a successful check.
+        assertEquals(false, check(enabled = false)) // Turned off in Settings.
+        assertEquals(false, check(offered = true)) // Update dialog already showing / installing.
+        assertEquals(false, check(running = true)) // A check (or its retries) is in progress.
+    }
+
+    @Test
     fun releaseNotesBecomePlainText() {
         val md = "**New**\n- Checks for its own [updates](https://x)\n\n## Heading\n* Item"
         assertEquals("New\n• Checks for its own updates\n\nHeading\n• Item", plainText(md))

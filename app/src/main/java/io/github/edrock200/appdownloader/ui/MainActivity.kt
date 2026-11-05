@@ -15,10 +15,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) {
-            handleIntent(intent)
-            viewModel.checkSelfUpdateOnLaunch()
-        }
+        if (savedInstanceState == null) handleIntent(intent)
         setContent {
             AppTheme {
                 MainScreen(viewModel)
@@ -29,6 +26,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Runs both on a fresh start and when the app is brought back from the background,
+        // which is how TVs usually "open" an app that is already running.
+        viewModel.checkSelfUpdateOnLaunch()
     }
 
     override fun onResume() {

@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-05
+
+### Fixed
+- App Downloader now checks for its own updates every time you open it, including when it was
+  still running in the background (the usual case on TVs). Before, it only checked after a restart.
+  It also retries if the network isn't ready yet, for example right after the TV wakes up.
+
 ## [1.4.1] - 2026-11-05
 
 ### Changed
