@@ -74,7 +74,7 @@ so the installed version is tracked.
 | Setting | Default | Notes |
 |---|---|---|
 | Only update links whose file has changed | on | Scheduled updates and *Update all now* skip links the website says are unchanged. Links that can't be checked are still downloaded and compared by version. |
-| Scheduled updates | off | *Set date & time* picks when to update all ticked apps, and whether to repeat daily or weekly. Saved as soon as you tap *Set*. |
+| Scheduled updates | off | *Set date & time* picks when to update all ticked apps, and whether to repeat daily, weekly, or throughout the day every 1, 2, 4, 8 or 12 hours (starting at the chosen time). Saved as soon as you tap *Set*. |
 | Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
 | GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |
 | Delete APK after installing | on | Downloaded files are kept in the app's cache otherwise |

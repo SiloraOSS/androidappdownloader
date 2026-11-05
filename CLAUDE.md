@@ -66,7 +66,9 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   `versionName`. Not installed → "Install", never "Update".
 - **Background checks:** `UpdateCheckWorker` → `checkAll()` → notify for GitHub entries whose
   `notifiedTag != latestTag` and links whose `notifiedChangeKey != remoteFingerprint.key`.
-- **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`) lives in `Settings` and is
+- **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`: once, daily, weekly, or
+  hourly `EVERY_1H…EVERY_12H` — hourly steps are fixed real-time intervals, daily/weekly keep wall-clock
+  time across DST) lives in `Settings` and is
   saved immediately by `MainViewModel.setSchedule`, which (re)enqueues a one-time WorkManager job.
   `AutoUpdateWorker` calls `controller.updateSelected(interactive = false)`, then computes the next run
   with `Schedule.nextRun` and enqueues it (`APPEND_OR_REPLACE` so it doesn't cancel itself).

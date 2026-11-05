@@ -13,10 +13,15 @@ object Schedule {
      */
     fun nextRun(at: Long, repeat: Repeat, now: Long, zone: TimeZone = TimeZone.getDefault()): Long? {
         if (at > now) return at
+        if (repeat.isHourly) {
+            // Fixed intervals of real time, so a DST change doesn't skip or double a run.
+            val interval = repeat.hours * 3_600_000L
+            return at + ((now - at) / interval + 1) * interval
+        }
         val field = when (repeat) {
-            Repeat.ONCE -> return null
             Repeat.DAILY -> Calendar.DAY_OF_YEAR
             Repeat.WEEKLY -> Calendar.WEEK_OF_YEAR
+            else -> return null
         }
         val cal = Calendar.getInstance(zone).apply { timeInMillis = at }
         while (cal.timeInMillis <= now) cal.add(field, 1)

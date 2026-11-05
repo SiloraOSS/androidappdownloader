@@ -44,6 +44,28 @@ class ScheduleTest {
     }
 
     @Test
+    fun hourlyRepeats() {
+        val start = t("2026-11-05 03:00")
+        assertEquals("2026-11-05 04:00", f(Schedule.nextRun(start, Repeat.EVERY_1H, t("2026-11-05 03:00"), ny)!!))
+        assertEquals("2026-11-05 13:00", f(Schedule.nextRun(start, Repeat.EVERY_2H, t("2026-11-05 12:10"), ny)!!))
+        assertEquals("2026-11-05 15:00", f(Schedule.nextRun(start, Repeat.EVERY_4H, t("2026-11-05 12:10"), ny)!!))
+        assertEquals("2026-11-05 19:00", f(Schedule.nextRun(start, Repeat.EVERY_8H, t("2026-11-05 12:10"), ny)!!))
+        assertEquals("2026-11-05 15:00", f(Schedule.nextRun(start, Repeat.EVERY_12H, t("2026-11-05 12:10"), ny)!!))
+        // A start time still in the future is used as is.
+        assertEquals(start, Schedule.nextRun(start, Repeat.EVERY_4H, t("2026-11-05 01:00"), ny))
+    }
+
+    @Test
+    fun hourlyRunsAreEvenlySpacedAcrossDaylightSavingChange() {
+        // Clocks go back at 2:00 on 2026-11-01, so 01:00-02:00 happens twice; runs stay one real hour apart.
+        val start = t("2026-11-01 00:00")
+        val next = Schedule.nextRun(start, Repeat.EVERY_1H, start, ny)!!
+        val after = Schedule.nextRun(start, Repeat.EVERY_1H, next, ny)!!
+        assertEquals(3_600_000L, next - start)
+        assertEquals(3_600_000L, after - next)
+    }
+
+    @Test
     fun atTimeAndDefault() {
         assertEquals("2026-11-07 22:45", f(Schedule.atTime(t("2026-11-07 09:13"), 22, 45, ny)))
         assertEquals("2026-11-06 03:00", f(Schedule.defaultTime(t("2026-11-05 12:00"), ny)))

@@ -105,22 +105,30 @@ fun ScheduleDialog(
                     )
                 }
                 Text(
-                    "Runs ${formatDateTime(context, at)}",
+                    if (repeat.isHourly) {
+                        "Starts ${formatDateTime(context, at)}, then ${repeat.label.lowercase()}"
+                    } else {
+                        "Runs ${formatDateTime(context, at)}"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
 
                 Text("Repeat", style = MaterialTheme.typography.titleSmall)
-                Repeat.entries.forEach { option ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .focusHighlight(FocusShapes.Row, scaleUp = false)
-                            .selectable(selected = repeat == option, onClick = { repeat = option; error = null }, role = Role.RadioButton),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = repeat == option, onClick = null)
-                        Text(option.label, Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp))
-                    }
+                Repeat.entries.filter { !it.isHourly }.forEach { option ->
+                    RepeatOption(option, selected = repeat == option) { repeat = option; error = null }
+                }
+
+                Text("Or check throughout the day", style = MaterialTheme.typography.titleSmall)
+                Repeat.entries.filter { it.isHourly }.forEach { option ->
+                    RepeatOption(option, selected = repeat == option) { repeat = option; error = null }
+                }
+                if (repeat.isHourly) {
+                    Text(
+                        "Frequent checks work best with \"Only update links whose file has changed\" turned on. " +
+                            "With many GitHub apps, add a GitHub token in Settings to avoid hitting GitHub's limit.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
@@ -139,6 +147,20 @@ fun ScheduleDialog(
             TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Cancel") }
         },
     )
+}
+
+@Composable
+private fun RepeatOption(option: Repeat, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .focusHighlight(FocusShapes.Row, scaleUp = false)
+            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(option.label, Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp))
+    }
 }
 
 @Composable

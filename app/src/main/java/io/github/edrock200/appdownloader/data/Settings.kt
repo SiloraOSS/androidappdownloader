@@ -21,10 +21,19 @@ data class SettingsState(
     val hasSchedule get() = scheduleAt > 0
 }
 
-enum class Repeat(val label: String) {
+/** How a scheduled update repeats. [hours] > 0 means "every N hours throughout the day". */
+enum class Repeat(val label: String, val hours: Int = 0) {
     ONCE("Once"),
     DAILY("Every day"),
     WEEKLY("Every week"),
+    EVERY_1H("Every hour", 1),
+    EVERY_2H("Every 2 hours", 2),
+    EVERY_4H("Every 4 hours", 4),
+    EVERY_8H("Every 8 hours", 8),
+    EVERY_12H("Every 12 hours", 12),
+    ;
+
+    val isHourly get() = hours > 0
 }
 
 class Settings(context: Context) {
