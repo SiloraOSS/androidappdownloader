@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Opening App Downloader now checks every app in your list for a new version.
+- Apps with an update get a gold star, and their button changes to "Update".
+- An "Update all" button appears at the top of the list when updates are found. It updates
+  every starred app, one after another.
+
 ## [1.5.0] - 2026-11-05
 
 ### Added

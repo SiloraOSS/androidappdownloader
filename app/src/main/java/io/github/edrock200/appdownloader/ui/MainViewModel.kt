@@ -161,6 +161,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearOp(id: String) = app.controller.clearOp(id)
     fun checkOne(id: String) = app.controller.checkOne(id)
     fun checkAll() = app.controller.checkAllNow()
+    fun checkAllOnLaunch() = app.controller.checkAllOnLaunch()
+
+    /** Apps marked with a star: a newer version was found, or one is downloaded and waiting. */
+    fun appsWithUpdates(list: List<EntryUi> = items.value) =
+        list.filter { (it.hasUpdate || it.waiting) && (it.op == null || it.op is OpState.Failed) }
+
+    /** "Update all" at the top of the list. */
+    fun updateAllAvailable() = app.controller.updateEntries(appsWithUpdates().map { it.entry.id })
     fun message(text: String) = app.controller.message(text)
     fun checkSelfUpdateOnLaunch() = app.controller.checkSelfUpdateOnLaunch()
     fun checkSelfUpdateNow() = app.controller.checkSelfUpdateNow()

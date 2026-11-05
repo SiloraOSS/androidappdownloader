@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -146,6 +148,7 @@ fun MainScreen(vm: MainViewModel) {
             AppController.SELF_UPDATE_ID -> vm.installSelfUpdate()
             UPDATE_ALL_ID -> vm.updateAllNow()
             INSTALL_WAITING_ID -> vm.installWaitingUpdates()
+            UPDATE_AVAILABLE_ID -> vm.updateAllAvailable()
             else -> vm.install(id)
         }
     }
@@ -205,6 +208,16 @@ fun MainScreen(vm: MainViewModel) {
                     },
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    val withUpdates = vm.appsWithUpdates(items)
+                    if (withUpdates.isNotEmpty()) {
+                        item(key = "update-all") {
+                            UpdateAllBar(
+                                count = withUpdates.size,
+                                updating = updatingAll,
+                                onUpdateAll = { install(UPDATE_AVAILABLE_ID) },
+                            )
+                        }
+                    }
                     items(items, key = { it.entry.id }) { item ->
                         EntryCard(
                             item = item,
@@ -449,6 +462,34 @@ private fun BackupDialogs(
 /** Pseudo ids for the install-permission dialog, alongside real entry ids. */
 private const val UPDATE_ALL_ID = "update-all"
 private const val INSTALL_WAITING_ID = "install-waiting"
+private const val UPDATE_AVAILABLE_ID = "update-available"
+
+/** Shown at the top of the list when any app has an update. */
+@Composable
+private fun UpdateAllBar(count: Int, updating: Boolean, onUpdateAll: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UpdateStar()
+            Spacer(Modifier.size(8.dp))
+            Text(
+                if (count == 1) "1 update available" else "$count updates available",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = onUpdateAll, enabled = !updating, modifier = Modifier.focusHighlight()) {
+                Text(if (updating) "Updating…" else "Update all")
+            }
+        }
+    }
+}
 
 @Composable
 private fun EmptyState(modifier: Modifier, onAdd: () -> Unit) {

@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         // Runs both on a fresh start and when the app is brought back from the background,
         // which is how TVs usually "open" an app that is already running.
         viewModel.checkSelfUpdateOnLaunch()
+        viewModel.checkAllOnLaunch()
     }
 
     override fun onResume() {

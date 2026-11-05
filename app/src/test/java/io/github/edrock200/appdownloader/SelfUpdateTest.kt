@@ -36,6 +36,15 @@ class SelfUpdateTest {
     }
 
     @Test
+    fun appListIsCheckedOnLaunchButNotOverAndOver() {
+        val min = UpdateCheckPolicy.MIN_INTERVAL_MS
+        assertEquals(true, UpdateCheckPolicy.shouldCheckOnLaunch(false, 0, 10 * min)) // First launch.
+        assertEquals(true, UpdateCheckPolicy.shouldCheckOnLaunch(false, 9 * min, 10 * min)) // Reopened later.
+        assertEquals(false, UpdateCheckPolicy.shouldCheckOnLaunch(false, 10 * min - 1000, 10 * min)) // Just checked.
+        assertEquals(false, UpdateCheckPolicy.shouldCheckOnLaunch(true, 0, 10 * min)) // Check in progress.
+    }
+
+    @Test
     fun releaseNotesBecomePlainText() {
         val md = "**New**\n- Checks for its own [updates](https://x)\n\n## Heading\n* Item"
         assertEquals("New\n• Checks for its own updates\n\nHeading\n• Item", plainText(md))

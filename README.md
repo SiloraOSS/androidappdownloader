@@ -12,6 +12,8 @@ installing them in one tap. It understands three kinds of sources:
 ## Features
 
 - Saved list of apps with installed version, latest GitHub release and an **Update** button when a newer release exists.
+  Every time the app is opened it checks all apps; ones with an update get a gold ★ and an
+  **Update all** button appears at the top of the list.
 - Background checks for new GitHub releases (every 3/6/12/24 hours, or manual only) with a notification listing available updates.
 - Picks the right release asset for the device's CPU (arm64-v8a, armeabi-v7a, x86, x86_64, universal). An optional per-repo filter (text or regex, e.g. `universal` or `fdroid.*\.apk`) handles repos with several flavours; pre-releases can be included per repo.
 - Installs plain `.apk` files and split bundles (`.xapk`, `.apks`) through Android's PackageInstaller.

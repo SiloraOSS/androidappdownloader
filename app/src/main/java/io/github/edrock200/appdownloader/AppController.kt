@@ -65,6 +65,14 @@ data class UpdateRunSummary(
     }.joinToString(", ").ifEmpty { "No apps are selected for auto-update" }
 }
 
+/** When opening the app should re-check every app for updates (pure, for tests). */
+object UpdateCheckPolicy {
+    const val MIN_INTERVAL_MS = 5 * 60_000L
+
+    fun shouldCheckOnLaunch(checkRunning: Boolean, lastCheckAt: Long, now: Long): Boolean =
+        !checkRunning && now - lastCheckAt >= MIN_INTERVAL_MS
+}
+
 /** When the automatic "is there a newer App Downloader?" check should run (pure, for tests). */
 object SelfUpdatePolicy {
     const val ATTEMPTS = 3
@@ -361,12 +369,28 @@ class AppController(
         }
     }
 
-    fun checkAllNow() {
+    /** When the last full check of all apps finished. */
+    private var lastFullCheckAt = 0L
+
+    /**
+     * Called every time the app is opened: checks every app for a newer version, quietly (the list
+     * shows the results). Skipped if a check is running or finished in the last few minutes, so
+     * switching in and out of the app doesn't use up GitHub's request limit.
+     */
+    fun checkAllOnLaunch() {
+        if (!UpdateCheckPolicy.shouldCheckOnLaunch(_checking.value, lastFullCheckAt, System.currentTimeMillis())) return
+        checkAllNow(quiet = true)
+    }
+
+    /** Checks every app for updates. [quiet] skips the "everything is up to date" message. */
+    fun checkAllNow(quiet: Boolean = false) {
         if (_checking.value) return
         scope.launch {
             _checking.value = true
             try {
                 val updates = checkAll()
+                lastFullCheckAt = System.currentTimeMillis()
+                if (quiet) return@launch
                 val errors = repository.entries.value.count { it.lastCheckError != null }
                 _messages.tryEmit(
                     buildString {
@@ -417,6 +441,44 @@ class AppController(
         scope.launch {
             val summary = updateSelected(interactive = true)
             _messages.tryEmit(summary.describe())
+        }
+    }
+
+    /**
+     * "Update all" at the top of the list: updates every app in [ids] (the ones marked as having
+     * an update), one at a time so Android's install prompts don't pile up.
+     */
+    fun updateEntries(ids: List<String>) {
+        if (_updatingAll.value || ids.isEmpty()) return
+        scope.launch {
+            _updatingAll.value = true
+            var updated = 0
+            var failed = 0
+            var skipped = 0
+            try {
+                for (id in ids) {
+                    val entry = repository.get(id) ?: continue
+                    if (isBusy(id)) continue
+                    val before = InstalledApps.get(context, entry.packageName)?.versionCode
+                    runInstall(id)
+                    awaitInstallResult(id)
+                    val after = InstalledApps.get(context, repository.get(id)?.packageName)?.versionCode
+                    when {
+                        _ops.value[id] is OpState.Failed -> failed++
+                        after != null && after != before -> updated++
+                        else -> skipped++ // Cancelled, or the download was the same version.
+                    }
+                }
+            } finally {
+                _updatingAll.value = false
+            }
+            _messages.tryEmit(
+                listOfNotNull(
+                    "Updated $updated app${if (updated == 1) "" else "s"}",
+                    "$failed failed".takeIf { failed > 0 },
+                    "$skipped not updated".takeIf { skipped > 0 },
+                ).joinToString(", ")
+            )
         }
     }
 

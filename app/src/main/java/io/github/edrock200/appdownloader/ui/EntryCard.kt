@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
@@ -95,6 +97,10 @@ fun EntryCard(
                         )
                         Spacer(Modifier.width(8.dp))
                         TypeBadge(entry.type)
+                        if (item.hasUpdate || item.waiting) {
+                            Spacer(Modifier.width(6.dp))
+                            UpdateStar()
+                        }
                     }
                     Text(
                         when (entry.type) {
@@ -202,8 +208,7 @@ fun EntryCard(
                             Text(
                                 when {
                                     item.waiting -> "Install update" + (entry.readyVersionName?.let { " $it" } ?: "")
-                                    item.hasUpdate && entry.type != SourceType.GITHUB -> "Update"
-                                    item.hasUpdate -> "Update to ${entry.latestTag}"
+                                    item.hasUpdate -> "Update"
                                     installed == null -> "Install"
                                     entry.type == SourceType.GITHUB -> "Reinstall"
                                     else -> "Re-download"
@@ -295,6 +300,17 @@ private fun OverflowMenu(
             DropdownMenuItem(text = { Text("Remove from list") }, modifier = itemModifier, onClick = { open = false; onDelete() })
         }
     }
+}
+
+/** Gold star shown next to apps that have an update. */
+@Composable
+fun UpdateStar(modifier: Modifier = Modifier) {
+    Icon(
+        Icons.Filled.Star,
+        contentDescription = "Update available",
+        tint = Color(0xFFFFB300),
+        modifier = modifier.size(20.dp),
+    )
 }
 
 @Composable

@@ -67,6 +67,12 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - **Update detection:** `VersionUtils.hasUpdate`. If the installed version code equals the one we
   installed, compare release tags; otherwise compare the tag's numbers with the installed
   `versionName`. Not installed → "Install", never "Update".
+- **Launch check:** `MainActivity.onStart` → `controller.checkAllOnLaunch()` runs a quiet `checkAllNow`
+  (no snackbar) unless one is running or finished within 5 minutes (`UpdateCheckPolicy`, protects the
+  GitHub rate limit). Cards with `hasUpdate || waiting` show `UpdateStar` and an "Update" button; the
+  list's first item is `UpdateAllBar`, which calls `controller.updateEntries(ids)` for exactly the
+  starred apps (regardless of the Auto-update tick box), installing one at a time via `runInstall` +
+  `awaitInstallResult`. Settings' "Update all now" is different: ticked apps only (`updateSelected`).
 - **Background checks:** `UpdateCheckWorker` → `checkAll()` → notify for GitHub entries whose
   `notifiedTag != latestTag` and links whose `notifiedChangeKey != remoteFingerprint.key`.
 - **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`: once, daily, weekly, or
