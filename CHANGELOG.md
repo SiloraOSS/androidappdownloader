@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Scheduled updates: pick a date and time in Settings (once, every day or every week) and
+  App Downloader updates all your apps at that time.
+- Each app now has an "Auto-update" tick box, so you choose which apps are included.
+- "Update all now" in Settings updates every ticked app straight away.
+- If Android needs you to confirm an install, the update is downloaded in advance and waits
+  for you. Next time you open App Downloader it offers to install it with one click.
+
 ## [1.1.0]
 
 ### Added

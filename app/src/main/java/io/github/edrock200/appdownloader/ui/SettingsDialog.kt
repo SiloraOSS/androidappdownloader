@@ -32,13 +32,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.edrock200.appdownloader.BuildConfig
+import io.github.edrock200.appdownloader.data.Repeat
 import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.SettingsState
 
 @Composable
 fun SettingsDialog(
     current: SettingsState,
+    updatingAll: Boolean,
     onCheckSelfUpdate: () -> Unit,
+    onScheduleChange: (at: Long, repeat: Repeat) -> Unit,
+    onUpdateAllNow: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (SettingsState) -> Unit,
 ) {
@@ -47,12 +51,43 @@ fun SettingsDialog(
     var interval by rememberSaveable { mutableStateOf(current.checkIntervalHours) }
     var deleteAfter by rememberSaveable { mutableStateOf(current.deleteApkAfterInstall) }
     var selfUpdates by rememberSaveable { mutableStateOf(current.checkSelfUpdates) }
+    var editingSchedule by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The schedule is saved as soon as it is set, so it isn't lost if Settings is cancelled.
+                Text("Scheduled updates", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (current.hasSchedule) {
+                        "Next: ${formatDateTime(context, current.scheduleAt)} · ${current.scheduleRepeat.label}"
+                    } else {
+                        "Not scheduled"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { editingSchedule = true }, modifier = Modifier.focusHighlight()) {
+                        Text(if (current.hasSchedule) "Change" else "Set date & time")
+                    }
+                    if (current.hasSchedule) {
+                        TextButton(onClick = { onScheduleChange(0, Repeat.ONCE) }, modifier = Modifier.focusHighlight()) {
+                            Text("Turn off")
+                        }
+                    }
+                }
+                OutlinedButton(onClick = onUpdateAllNow, enabled = !updatingAll, modifier = Modifier.focusHighlight()) {
+                    Text(if (updatingAll) "Updating…" else "Update all now")
+                }
+                Text(
+                    "Updates the apps with \"Auto-update\" ticked. If Android asks to confirm an install, " +
+                        "the update is downloaded and waits for you the next time you open App Downloader.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                HorizontalDivider()
                 Text("Check GitHub for updates", style = MaterialTheme.typography.titleSmall)
                 Settings.INTERVAL_OPTIONS.forEach { hours ->
                     Row(
@@ -113,7 +148,7 @@ fun SettingsDialog(
         confirmButton = {
             TextButton(modifier = Modifier.focusHighlight(), onClick = {
                 onSave(
-                    SettingsState(
+                    current.copy(
                         githubToken = token,
                         checkIntervalHours = interval,
                         deleteApkAfterInstall = deleteAfter,
@@ -124,6 +159,18 @@ fun SettingsDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Cancel") } },
     )
+
+    if (editingSchedule) {
+        ScheduleDialog(
+            initialAt = current.scheduleAt,
+            initialRepeat = current.scheduleRepeat,
+            onDismiss = { editingSchedule = false },
+            onSave = { at, repeat ->
+                editingSchedule = false
+                onScheduleChange(at, repeat)
+            },
+        )
+    }
 }
 
 /** A label + switch where the whole row is one focusable, toggleable target (easier with a remote). */

@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import io.github.edrock200.appdownloader.App
 import io.github.edrock200.appdownloader.OpState
 import io.github.edrock200.appdownloader.data.AppEntry
+import io.github.edrock200.appdownloader.data.Repeat
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.SourceParser
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.data.VersionUtils
 import io.github.edrock200.appdownloader.install.InstalledApps
 import io.github.edrock200.appdownloader.install.InstalledInfo
+import io.github.edrock200.appdownloader.work.AutoUpdateScheduler
 import io.github.edrock200.appdownloader.work.UpdateScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,13 +22,18 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 data class EntryUi(
     val entry: AppEntry,
     val installed: InstalledInfo?,
     val op: OpState?,
     val hasUpdate: Boolean,
-)
+) {
+    /** A scheduled run downloaded an update that still needs to be installed. */
+    val waiting get() = entry.readyFile != null
+}
 
 /** Values collected from the add/edit dialog. */
 data class EntryForm(
@@ -53,6 +60,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val checking = app.controller.checking
     val ops = app.controller.ops
     val selfUpdate = app.controller.selfUpdate
+    val updatingAll = app.controller.updatingAll
+
+    /** Whether the "updates are waiting" prompt was already shown since the app was opened. */
+    var waitingPromptShown = false
     val settings = app.settings.state
     val messages = app.controller.messages
 
@@ -129,7 +140,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun delete(id: String) {
         app.controller.clearOp(id)
-        viewModelScope.launch { app.repository.delete(id) }
+        viewModelScope.launch {
+            app.repository.get(id)?.readyFile?.let { path -> withContext(Dispatchers.IO) { File(path).delete() } }
+            app.repository.delete(id)
+        }
     }
 
     fun install(id: String) = app.controller.downloadAndInstall(id)
@@ -140,6 +154,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun checkSelfUpdateOnLaunch() = app.controller.checkSelfUpdateOnLaunch()
     fun checkSelfUpdateNow() = app.controller.checkSelfUpdateNow()
     fun installSelfUpdate() = app.controller.installSelfUpdate()
+    fun updateAllNow() = app.controller.updateAllNow()
+    fun installWaitingUpdates() = app.controller.installWaitingUpdates()
+
+    fun setSchedule(at: Long, repeat: Repeat) {
+        saveSettings(app.settings.current.copy(scheduleAt = at, scheduleRepeat = repeat))
+        if (at > 0) message("Updates scheduled for ${formatDateTime(app, at)}")
+    }
+
+    fun setAutoUpdate(id: String, enabled: Boolean) {
+        viewModelScope.launch { app.repository.update(id) { it.copy(autoUpdate = enabled) } }
+    }
     fun dismissSelfUpdate() = app.controller.dismissSelfUpdate()
 
     fun saveSettings(state: SettingsState) {
@@ -147,6 +172,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         app.settings.update(state)
         if (old.checkIntervalHours != state.checkIntervalHours) {
             UpdateScheduler.schedule(app, state.checkIntervalHours)
+        }
+        if (old.scheduleAt != state.scheduleAt || old.scheduleRepeat != state.scheduleRepeat) {
+            AutoUpdateScheduler.apply(app, state)
         }
     }
 }

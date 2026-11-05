@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -35,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +54,7 @@ fun EntryCard(
     onCheck: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onAutoUpdateChange: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -70,7 +74,7 @@ fun EntryCard(
                 if (cardFocused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CardDefaults.shape)
                 else Modifier
             ),
-        colors = if (item.hasUpdate) {
+        colors = if (item.hasUpdate || item.waiting) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
         } else {
             CardDefaults.cardColors()
@@ -137,6 +141,14 @@ fun EntryCard(
                     }
                 }
 
+                if (item.waiting) {
+                    InfoLine(
+                        "Downloaded",
+                        listOfNotNull(entry.readyVersionName ?: entry.readyTag, "ready to install").joinToString(" · "),
+                        highlight = true,
+                    )
+                }
+
                 when (op) {
                     null -> Unit
                     is OpState.Failed -> {
@@ -171,6 +183,7 @@ fun EntryCard(
                         else -> Button(onClick = onInstall, modifier = Modifier.focusHighlight()) {
                             Text(
                                 when {
+                                    item.waiting -> "Install update" + (entry.readyVersionName?.let { " $it" } ?: "")
                                     item.hasUpdate -> "Update to ${entry.latestTag}"
                                     installed == null -> "Install"
                                     entry.type == SourceType.GITHUB -> "Reinstall"
@@ -197,6 +210,22 @@ fun EntryCard(
                         }
                         TextButton(onClick = onCancel, modifier = Modifier.focusHighlight()) { Text("Dismiss") }
                     }
+                }
+
+                Row(
+                    Modifier
+                        .padding(top = 4.dp)
+                        .focusHighlight(FocusShapes.Row, scaleUp = false)
+                        .toggleable(value = entry.autoUpdate, role = Role.Checkbox, onValueChange = onAutoUpdateChange)
+                        .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = entry.autoUpdate, onCheckedChange = null)
+                    Text(
+                        if (installed == null) "Auto-update (once installed)" else "Auto-update",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp),
+                    )
                 }
             }
         }

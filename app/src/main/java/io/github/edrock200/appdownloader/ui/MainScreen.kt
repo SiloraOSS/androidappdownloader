@@ -65,6 +65,9 @@ fun MainScreen(vm: MainViewModel) {
     val selfUpdate by vm.selfUpdate.collectAsStateWithLifecycle()
     val ops by vm.ops.collectAsStateWithLifecycle()
     val isTv = rememberIsTv()
+    val updatingAll by vm.updatingAll.collectAsStateWithLifecycle()
+    var showWaitingPrompt by rememberSaveable { mutableStateOf(false) }
+    val waitingItems = items.filter { it.waiting && it.op == null }
     val snackbar = remember { SnackbarHostState() }
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
@@ -91,9 +94,21 @@ fun MainScreen(vm: MainViewModel) {
     LaunchedEffect(sharedText) {
         if (sharedText != null) showAdd = true
     }
+    // Once per app start, offer to install updates that a scheduled run downloaded.
+    LaunchedEffect(waitingItems.isNotEmpty(), selfUpdate == null) {
+        if (waitingItems.isNotEmpty() && selfUpdate == null && !vm.waitingPromptShown) {
+            vm.waitingPromptShown = true
+            showWaitingPrompt = true
+        }
+    }
 
     fun startInstall(id: String) {
-        if (id == AppController.SELF_UPDATE_ID) vm.installSelfUpdate() else vm.install(id)
+        when (id) {
+            AppController.SELF_UPDATE_ID -> vm.installSelfUpdate()
+            UPDATE_ALL_ID -> vm.updateAllNow()
+            INSTALL_WAITING_ID -> vm.installWaitingUpdates()
+            else -> vm.install(id)
+        }
     }
 
     fun install(id: String) {
@@ -159,6 +174,7 @@ fun MainScreen(vm: MainViewModel) {
                             onCheck = { vm.checkOne(item.entry.id) },
                             onEdit = { editing = item.entry },
                             onDelete = { deleting = item.entry },
+                            onAutoUpdateChange = { vm.setAutoUpdate(item.entry.id, it) },
                             onMessage = vm::message,
                         )
                     }
@@ -255,10 +271,43 @@ fun MainScreen(vm: MainViewModel) {
         )
     }
 
+    if (showWaitingPrompt && waitingItems.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showWaitingPrompt = false },
+            title = { Text(if (waitingItems.size == 1) "Update ready to install" else "${waitingItems.size} updates ready to install") },
+            text = {
+                Text(
+                    "These were downloaded by your scheduled update and need your OK to install:\n\n" +
+                        waitingItems.joinToString("\n") { item ->
+                            "• " + item.entry.name + (item.entry.readyVersionName?.let { " $it" } ?: "")
+                        }
+                )
+            },
+            confirmButton = {
+                Button(modifier = Modifier.focusHighlight(), onClick = {
+                    showWaitingPrompt = false
+                    install(INSTALL_WAITING_ID)
+                }) { Text("Install now") }
+            },
+            dismissButton = {
+                TextButton(modifier = Modifier.focusHighlight(), onClick = { showWaitingPrompt = false }) { Text("Later") }
+            },
+        )
+    }
+
     if (showSettings) {
         SettingsDialog(
             current = settings,
+            updatingAll = updatingAll,
             onCheckSelfUpdate = vm::checkSelfUpdateNow,
+            onScheduleChange = { at, repeat ->
+                vm.setSchedule(at, repeat)
+                if (at > 0) askForNotifications()
+            },
+            onUpdateAllNow = {
+                showSettings = false
+                install(UPDATE_ALL_ID)
+            },
             onDismiss = { showSettings = false },
             onSave = {
                 vm.saveSettings(it)
@@ -270,6 +319,10 @@ fun MainScreen(vm: MainViewModel) {
         )
     }
 }
+
+/** Pseudo ids for the install-permission dialog, alongside real entry ids. */
+private const val UPDATE_ALL_ID = "update-all"
+private const val INSTALL_WAITING_ID = "install-waiting"
 
 @Composable
 private fun EmptyState(modifier: Modifier, onAdd: () -> Unit) {

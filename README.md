@@ -20,6 +20,10 @@ installing them in one tap. It understands three kinds of sources:
 - Built for TV remotes on Fire TV, Android TV and Google TV: it appears in the TV launcher, the
   selected button is clearly outlined, there's extra margin for TV overscan, and options that need a
   web browser are hidden on TVs without one.
+- **Scheduled updates:** choose a date and time (once, daily or weekly) and every app with
+  *Auto-update* ticked is updated then. On Android 12+ apps that App Downloader installed are
+  updated silently; anything Android wants you to confirm is downloaded and waiting, and the app
+  offers to install it next time you open it. *Update all now* runs the same thing immediately.
 - Keeps itself up to date: when opened it checks this repository for a newer version and offers to
   install it. This can be turned off in Settings.
 
@@ -64,6 +68,7 @@ so the installed version is tracked.
 
 | Setting | Default | Notes |
 |---|---|---|
+| Scheduled updates | off | *Set date & time* picks when to update all ticked apps, and whether to repeat daily or weekly. Saved as soon as you tap *Set*. |
 | Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
 | GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |
 | Delete APK after installing | on | Downloaded files are kept in the app's cache otherwise |
@@ -79,6 +84,8 @@ so the installed version is tracked.
 | *Conflicts with the installed app* | The installed copy is signed with a different key. Uninstall it, then install again. |
 | Install prompt never appears on Fire TV | Allow installs under Settings › My Fire TV › Developer options › Install unknown apps. |
 | Install prompt never appears on Android TV / Google TV | Allow installs under Settings › Apps › Security & restrictions › Unknown sources (older models: Settings › Device Preferences › Security & restrictions). |
+| Scheduled update didn't install anything | Android only allows silent updates on Android 12+ for apps App Downloader installed itself. Otherwise updates are downloaded and waiting. Open the app and choose *Install now*. Fire TV always asks to confirm. |
+| Scheduled update ran late | Android may delay background work by a few minutes to save power, and waits for a network connection. |
 | No update notifications on a TV | Many TV launchers don't show notifications. Apps with updates are highlighted at the top of the list when you open the app. |
 
 ## Building

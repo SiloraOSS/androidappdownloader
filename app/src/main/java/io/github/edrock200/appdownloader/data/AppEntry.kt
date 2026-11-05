@@ -42,4 +42,14 @@ data class AppEntry(
     val installedVersionCode: Long? = null,
     /** Tag we already notified the user about, so we don't notify twice. */
     val notifiedTag: String? = null,
+
+    // ---- Scheduled updates ----
+    /** Include this app when scheduled / "update all" runs happen. */
+    val autoUpdate: Boolean = true,
+    /** A downloaded update waiting to be installed (Android needed the user to confirm). */
+    val readyFile: String? = null,
+    val readyVersionName: String? = null,
+    val readyVersionCode: Long? = null,
+    /** Release tag of [readyFile], for GitHub entries. */
+    val readyTag: String? = null,
 )

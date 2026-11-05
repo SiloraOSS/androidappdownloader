@@ -12,7 +12,18 @@ data class SettingsState(
     val deleteApkAfterInstall: Boolean = true,
     /** Check this app's own GitHub releases when it is opened. */
     val checkSelfUpdates: Boolean = true,
-)
+    /** Next scheduled "update all" run (epoch millis), or 0 when none is scheduled. */
+    val scheduleAt: Long = 0,
+    val scheduleRepeat: Repeat = Repeat.ONCE,
+) {
+    val hasSchedule get() = scheduleAt > 0
+}
+
+enum class Repeat(val label: String) {
+    ONCE("Once"),
+    DAILY("Every day"),
+    WEEKLY("Every week"),
+}
 
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -27,6 +38,8 @@ class Settings(context: Context) {
             .putInt(KEY_INTERVAL, newState.checkIntervalHours)
             .putBoolean(KEY_DELETE, newState.deleteApkAfterInstall)
             .putBoolean(KEY_SELF_UPDATE, newState.checkSelfUpdates)
+            .putLong(KEY_SCHEDULE_AT, newState.scheduleAt)
+            .putString(KEY_SCHEDULE_REPEAT, newState.scheduleRepeat.name)
             .apply()
         _state.value = newState.copy(githubToken = newState.githubToken.trim())
     }
@@ -36,6 +49,9 @@ class Settings(context: Context) {
         checkIntervalHours = prefs.getInt(KEY_INTERVAL, 12),
         deleteApkAfterInstall = prefs.getBoolean(KEY_DELETE, true),
         checkSelfUpdates = prefs.getBoolean(KEY_SELF_UPDATE, true),
+        scheduleAt = prefs.getLong(KEY_SCHEDULE_AT, 0),
+        scheduleRepeat = runCatching { Repeat.valueOf(prefs.getString(KEY_SCHEDULE_REPEAT, null)!!) }
+            .getOrDefault(Repeat.ONCE),
     )
 
     companion object {
@@ -43,6 +59,8 @@ class Settings(context: Context) {
         private const val KEY_INTERVAL = "check_interval_hours"
         private const val KEY_DELETE = "delete_after_install"
         private const val KEY_SELF_UPDATE = "check_self_updates"
+        private const val KEY_SCHEDULE_AT = "schedule_at"
+        private const val KEY_SCHEDULE_REPEAT = "schedule_repeat"
         val INTERVAL_OPTIONS = listOf(0, 3, 6, 12, 24)
     }
 }

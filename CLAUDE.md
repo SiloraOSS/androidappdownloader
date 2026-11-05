@@ -41,7 +41,9 @@ All code lives in `app/src/main/java/io/github/edrock200/appdownloader/`:
 | `install/ApkDownloader.kt` | Streaming download with progress; scans HTML pages for `.apk` links; validates zip magic. |
 | `install/ApkInspector.kt` | Reads package name/version/label; picks splits from `.xapk`/`.apks`; `InstalledApps` lookup. |
 | `install/ApkInstaller.kt` | `PackageInstaller` session install; result goes to `InstallResultReceiver`. |
-| `work/` | WorkManager periodic update check, scheduler, notifications. |
+| `work/` | WorkManager jobs: periodic GitHub check (`UpdateCheckWorker`), the user's scheduled "update all" run (`AutoUpdateWorker` + `AutoUpdateScheduler`), notifications. |
+| `data/Schedule.kt` | Pure date/time math for scheduled runs (`nextRun`, `atTime`), DST-safe via `Calendar`. |
+| `ui/ScheduleDialog.kt` | Date/time/repeat picker built from step buttons (works with a TV remote). |
 | `ui/` | `MainActivity`, `MainViewModel`, Compose screens and dialogs, `SystemActions` (intents to the system). |
 | `ui/Tv.kt` | `Modifier.focusHighlight()` (remote-friendly focus ring), `Device.isTv/isFireTv`, per-device install-permission help. |
 | `ui/SelfUpdateDialog.kt` | Prompt shown when a newer App Downloader release exists. |
@@ -63,6 +65,18 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   `versionName`. Not installed → "Install", never "Update".
 - **Background checks:** `UpdateCheckWorker` → `checkAllGitHub()` → notify for entries whose
   `notifiedTag != latestTag`.
+- **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`) lives in `Settings` and is
+  saved immediately by `MainViewModel.setSchedule`, which (re)enqueues a one-time WorkManager job.
+  `AutoUpdateWorker` calls `controller.updateSelected(interactive = false)`, then computes the next run
+  with `Schedule.nextRun` and enqueues it (`APPEND_OR_REPLACE` so it doesn't cancel itself).
+  `updateSelected` handles installed entries with `autoUpdate`: `prepareUpdate` checks GitHub (or, for
+  links, downloads and compares versionCode), and stores a newer APK as `readyFile`/`readyVersion*`/`readyTag`.
+  Background runs commit sessions with `EXTRA_BACKGROUND`; on Android 12+ they can complete silently,
+  otherwise `InstallResultReceiver` abandons the session on `STATUS_PENDING_USER_ACTION` and the update
+  stays "waiting" (notification + prompt on next launch). Below Android 12 nothing is committed in
+  the background. Interactive runs ("Update all now", "Install now") install one app at a time,
+  waiting for each result (`awaitInstallResult`). `runInstall` always prefers a waiting `readyFile`;
+  stale ones (older than installed, or not the latest GitHub tag) are discarded.
 - **Self-update:** `MainActivity.onCreate` (fresh start only) → `controller.checkSelfUpdateOnLaunch()`
   (skipped when the *checkSelfUpdates* setting is off) looks up `BuildConfig.UPDATE_REPO`'s releases
   for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one
