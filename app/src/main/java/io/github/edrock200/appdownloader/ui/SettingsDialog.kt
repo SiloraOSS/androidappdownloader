@@ -42,6 +42,7 @@ fun SettingsDialog(
     updatingAll: Boolean,
     onCheckSelfUpdate: () -> Unit,
     onScheduleChange: (at: Long, repeat: Repeat) -> Unit,
+    onOnlyIfChangedChange: (Boolean) -> Unit,
     onUpdateAllNow: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (SettingsState) -> Unit,
@@ -78,6 +79,13 @@ fun SettingsDialog(
                         }
                     }
                 }
+                SwitchRow("Only update links whose file has changed", current.updateOnlyIfChanged, onOnlyIfChangedChange)
+                Text(
+                    "Asks the website whether the file changed before downloading it. If the website " +
+                        "doesn't say, the file is downloaded and its version compared, so no update is missed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 OutlinedButton(onClick = onUpdateAllNow, enabled = !updatingAll, modifier = Modifier.focusHighlight()) {
                     Text(if (updatingAll) "Updating…" else "Update all now")
                 }

@@ -1,5 +1,7 @@
 package io.github.edrock200.appdownloader.data
 
+import io.github.edrock200.appdownloader.net.RemoteChange
+import io.github.edrock200.appdownloader.net.RemoteFingerprint
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -52,4 +54,17 @@ data class AppEntry(
     val readyVersionCode: Long? = null,
     /** Release tag of [readyFile], for GitHub entries. */
     val readyTag: String? = null,
+
+    // ---- Change detection for links / aftv codes ----
+    /** Server details of the file that was last installed from this entry. */
+    val fingerprint: RemoteFingerprint? = null,
+    /** Details of a downloaded file whose install hasn't finished yet. */
+    val pendingFingerprint: RemoteFingerprint? = null,
+    /** What the server reported at the last check. */
+    val remoteFingerprint: RemoteFingerprint? = null,
+    /** Result of the last check; null when never checked. */
+    val remoteChange: RemoteChange? = null,
+    val remoteCheckedAt: Long? = null,
+    /** [RemoteFingerprint.key] we already notified about. */
+    val notifiedChangeKey: String? = null,
 )

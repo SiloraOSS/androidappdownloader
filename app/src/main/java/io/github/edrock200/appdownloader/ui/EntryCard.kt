@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import io.github.edrock200.appdownloader.OpState
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.net.AftvResolver
+import io.github.edrock200.appdownloader.net.RemoteChange
 
 @Composable
 fun EntryCard(
@@ -139,6 +140,23 @@ fun EntryCard(
                         )
                         else -> InfoLine("Latest", "Not checked yet")
                     }
+                } else if (installed != null) {
+                    // Links: has the file on the website changed since the installed copy was downloaded?
+                    val checked = entry.remoteCheckedAt?.let { " · checked " + relativeTime(it) }.orEmpty()
+                    when {
+                        entry.lastCheckError != null -> Text(
+                            entry.lastCheckError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        entry.remoteChange == RemoteChange.CHANGED ->
+                            InfoLine("File", "Changed on the website$checked", highlight = true)
+                        entry.remoteChange == RemoteChange.UNCHANGED ->
+                            InfoLine("File", "No change since you installed it$checked")
+                        entry.remoteChange == RemoteChange.UNKNOWN ->
+                            InfoLine("File", "The website doesn't say if it changed$checked")
+                        else -> InfoLine("File", "Not checked yet")
+                    }
                 }
 
                 if (item.waiting) {
@@ -184,6 +202,7 @@ fun EntryCard(
                             Text(
                                 when {
                                     item.waiting -> "Install update" + (entry.readyVersionName?.let { " $it" } ?: "")
+                                    item.hasUpdate && entry.type != SourceType.GITHUB -> "Update"
                                     item.hasUpdate -> "Update to ${entry.latestTag}"
                                     installed == null -> "Install"
                                     entry.type == SourceType.GITHUB -> "Reinstall"
@@ -250,7 +269,7 @@ private fun OverflowMenu(
             Icon(Icons.Filled.MoreVert, contentDescription = "More options")
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (entry.type == SourceType.GITHUB) {
+            if (entry.type == SourceType.GITHUB || item.installed != null) {
                 DropdownMenuItem(text = { Text("Check for update") }, modifier = itemModifier, onClick = { open = false; onCheck() })
             }
             if (entry.type == SourceType.GITHUB && hasBrowser) {
@@ -313,5 +332,12 @@ private fun InfoLine(label: String, value: String, highlight: Boolean = false) {
         )
     }
 }
+
+private fun relativeTime(millis: Long): String =
+    android.text.format.DateUtils.getRelativeTimeSpanString(
+        millis,
+        System.currentTimeMillis(),
+        android.text.format.DateUtils.MINUTE_IN_MILLIS,
+    ).toString().replaceFirstChar { it.lowercase() }
 
 private fun versionLabel(name: String?, code: Long) = if (name.isNullOrBlank()) "build $code" else "$name ($code)"

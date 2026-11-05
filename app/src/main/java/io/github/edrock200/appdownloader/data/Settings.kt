@@ -15,6 +15,8 @@ data class SettingsState(
     /** Next scheduled "update all" run (epoch millis), or 0 when none is scheduled. */
     val scheduleAt: Long = 0,
     val scheduleRepeat: Repeat = Repeat.ONCE,
+    /** Scheduled / "update all" runs skip links whose file the server says hasn't changed. */
+    val updateOnlyIfChanged: Boolean = true,
 ) {
     val hasSchedule get() = scheduleAt > 0
 }
@@ -40,6 +42,7 @@ class Settings(context: Context) {
             .putBoolean(KEY_SELF_UPDATE, newState.checkSelfUpdates)
             .putLong(KEY_SCHEDULE_AT, newState.scheduleAt)
             .putString(KEY_SCHEDULE_REPEAT, newState.scheduleRepeat.name)
+            .putBoolean(KEY_ONLY_IF_CHANGED, newState.updateOnlyIfChanged)
             .apply()
         _state.value = newState.copy(githubToken = newState.githubToken.trim())
     }
@@ -52,6 +55,7 @@ class Settings(context: Context) {
         scheduleAt = prefs.getLong(KEY_SCHEDULE_AT, 0),
         scheduleRepeat = runCatching { Repeat.valueOf(prefs.getString(KEY_SCHEDULE_REPEAT, null)!!) }
             .getOrDefault(Repeat.ONCE),
+        updateOnlyIfChanged = prefs.getBoolean(KEY_ONLY_IF_CHANGED, true),
     )
 
     companion object {
@@ -61,6 +65,7 @@ class Settings(context: Context) {
         private const val KEY_SELF_UPDATE = "check_self_updates"
         private const val KEY_SCHEDULE_AT = "schedule_at"
         private const val KEY_SCHEDULE_REPEAT = "schedule_repeat"
+        private const val KEY_ONLY_IF_CHANGED = "update_only_if_changed"
         val INTERVAL_OPTIONS = listOf(0, 3, 6, 12, 24)
     }
 }

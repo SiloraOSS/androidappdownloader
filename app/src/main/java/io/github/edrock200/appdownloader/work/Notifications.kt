@@ -13,6 +13,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.github.edrock200.appdownloader.R
 import io.github.edrock200.appdownloader.data.AppEntry
+import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.ui.MainActivity
 
 object Notifications {
@@ -46,7 +47,7 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val title = if (updates.size == 1) "Update available: ${updates[0].name}" else "${updates.size} app updates available"
-        val lines = updates.map { "${it.name} → ${it.latestTag}" }
+        val lines = updates.map { if (it.latestTag != null && it.type == SourceType.GITHUB) "${it.name} → ${it.latestTag}" else "${it.name}: new file available" }
         val style = NotificationCompat.InboxStyle().also { s -> lines.forEach { s.addLine(it) } }
         val notification = NotificationCompat.Builder(context, CHANNEL_UPDATES)
             .setSmallIcon(R.drawable.ic_notification)

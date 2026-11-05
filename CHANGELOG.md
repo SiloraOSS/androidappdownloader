@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Plain links and aftv.news codes now show whether the file on the website has changed since
+  you installed it ("Changed on the website" / "No change"), checked without downloading it.
+  The ⟳ button and "Check for update" now cover these apps too, and you get notified about changes.
+- New setting "Only update links whose file has changed" (on by default) for scheduled updates and
+  "Update all now". If a website doesn't say whether its file changed, it is still downloaded and
+  compared, so no update is missed.
+
 ## [1.2.0] - 2026-11-05
 
 ### Added

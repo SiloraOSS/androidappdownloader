@@ -120,7 +120,7 @@ fun MainScreen(vm: MainViewModel) {
             TopAppBar(
                 title = { Text("App Downloader") },
                 actions = {
-                    if (items.any { it.entry.type == SourceType.GITHUB }) {
+                    if (items.any { it.entry.type == SourceType.GITHUB || it.installed != null }) {
                         if (checking) {
                             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -304,6 +304,7 @@ fun MainScreen(vm: MainViewModel) {
                 vm.setSchedule(at, repeat)
                 if (at > 0) askForNotifications()
             },
+            onOnlyIfChangedChange = vm::setUpdateOnlyIfChanged,
             onUpdateAllNow = {
                 showSettings = false
                 install(UPDATE_ALL_ID)

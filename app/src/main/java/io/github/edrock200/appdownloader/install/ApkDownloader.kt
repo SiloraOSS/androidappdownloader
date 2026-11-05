@@ -1,6 +1,8 @@
 package io.github.edrock200.appdownloader.install
 
 import io.github.edrock200.appdownloader.net.Http
+import io.github.edrock200.appdownloader.net.RemoteFingerprint
+import io.github.edrock200.appdownloader.net.RemoteProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -16,7 +18,13 @@ class NotAnApkException(message: String, val pageUrl: String) : IOException(mess
 
 object ApkDownloader {
 
-    data class Result(val file: File, val finalUrl: String, val fileName: String)
+    data class Result(
+        val file: File,
+        val finalUrl: String,
+        val fileName: String,
+        /** Server details of the downloaded file, for later change checks. */
+        val fingerprint: RemoteFingerprint?,
+    )
 
     private val APK_LINK = Regex(
         """href\s*=\s*["']([^"'\s>]+?\.(?:apk|apks|xapk)(?:\?[^"'\s>]*)?)["']""",
@@ -100,7 +108,15 @@ object ApkDownloader {
             dest.delete()
             if (!part.renameTo(dest)) throw IOException("Could not save the downloaded file")
             onProgress(1f)
-            return Result(dest, finalUrl, fileName)
+            val fingerprint = RemoteProbe.fromHeaders(
+                contentType = response.header("Content-Type"),
+                etag = response.header("ETag"),
+                lastModified = response.header("Last-Modified"),
+                contentLength = dest.length().toString(),
+                contentRange = null,
+                finalUrl = finalUrl,
+            )
+            return Result(dest, finalUrl, fileName, fingerprint)
         }
     }
 

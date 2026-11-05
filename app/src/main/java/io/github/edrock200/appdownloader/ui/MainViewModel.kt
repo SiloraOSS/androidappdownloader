@@ -52,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val items = combine(app.repository.entries, app.controller.ops, installedTick) { entries, ops, _ ->
         entries.map { e ->
             val installed = InstalledApps.get(app, e.packageName)
-            EntryUi(e, installed, ops[e.id], VersionUtils.hasUpdate(e, installed?.versionName, installed?.versionCode))
+            EntryUi(e, installed, ops[e.id], VersionUtils.updateAvailable(e, installed?.versionName, installed?.versionCode))
         }.sortedWith(compareByDescending<EntryUi> { it.hasUpdate }.thenBy { it.entry.name.lowercase() })
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -160,6 +160,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSchedule(at: Long, repeat: Repeat) {
         saveSettings(app.settings.current.copy(scheduleAt = at, scheduleRepeat = repeat))
         if (at > 0) message("Updates scheduled for ${formatDateTime(app, at)}")
+    }
+
+    fun setUpdateOnlyIfChanged(enabled: Boolean) {
+        saveSettings(app.settings.current.copy(updateOnlyIfChanged = enabled))
     }
 
     fun setAutoUpdate(id: String, enabled: Boolean) {

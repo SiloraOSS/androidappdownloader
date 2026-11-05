@@ -20,6 +20,11 @@ installing them in one tap. It understands three kinds of sources:
 - Built for TV remotes on Fire TV, Android TV and Google TV: it appears in the TV launcher, the
   selected button is clearly outlined, there's extra margin for TV overscan, and options that need a
   web browser are hidden on TVs without one.
+- **Change detection for links:** for direct links and aftv.news codes the app asks the website
+  whether the file changed since you installed it, without downloading it, and shows *Changed on
+  the website* / *No change* on the card. This works when the site reports a file fingerprint
+  (ETag), modification date or size, as GitHub, F-Droid and most file hosts do. Web pages and
+  download scripts usually don't, and show *The website doesn't say if it changed*.
 - **Scheduled updates:** choose a date and time (once, daily or weekly) and every app with
   *Auto-update* ticked is updated then. On Android 12+ apps that App Downloader installed are
   updated silently; anything Android wants you to confirm is downloaded and waiting, and the app
@@ -68,6 +73,7 @@ so the installed version is tracked.
 
 | Setting | Default | Notes |
 |---|---|---|
+| Only update links whose file has changed | on | Scheduled updates and *Update all now* skip links the website says are unchanged. Links that can't be checked are still downloaded and compared by version. |
 | Scheduled updates | off | *Set date & time* picks when to update all ticked apps, and whether to repeat daily or weekly. Saved as soon as you tap *Set*. |
 | Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
 | GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |

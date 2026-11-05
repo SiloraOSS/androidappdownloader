@@ -29,6 +29,16 @@ object VersionUtils {
      * [installedVersionName]/[installedVersionCode] describe the app currently on
      * the device, or are null when it is not installed.
      */
+    /** A link / aftv entry whose file changed on the server since the installed copy was downloaded. */
+    fun linkChanged(entry: AppEntry, installedVersionCode: Long?): Boolean =
+        entry.type != SourceType.GITHUB && installedVersionCode != null &&
+            entry.remoteChange == io.github.edrock200.appdownloader.net.RemoteChange.CHANGED
+
+    /** Whether the card should offer an update, for any kind of source. */
+    fun updateAvailable(entry: AppEntry, installedVersionName: String?, installedVersionCode: Long?): Boolean =
+        if (entry.type == SourceType.GITHUB) hasUpdate(entry, installedVersionName, installedVersionCode)
+        else linkChanged(entry, installedVersionCode)
+
     fun hasUpdate(entry: AppEntry, installedVersionName: String?, installedVersionCode: Long?): Boolean {
         val latest = entry.latestTag ?: return false
         if (entry.latestAssetUrl == null) return false

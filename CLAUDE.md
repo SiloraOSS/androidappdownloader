@@ -38,6 +38,7 @@ All code lives in `app/src/main/java/io/github/edrock200/appdownloader/`:
 | `net/AftvResolver.kt` | Resolves codes via `https://go.aftvnews.com/<code>` by parsing the redirect page HTML. |
 | `net/GitHubClient.kt` | Releases API, repo URL parsing, `pickRelease` (pure). |
 | `net/AssetSelector.kt` | Chooses the release asset for the device ABI / user filter (pure). |
+| `net/RemoteProbe.kt` | Header-only "has this file changed?" check: `fingerprint(url)` (HEAD, falls back to a 1-byte ranged GET), pure `fromHeaders`/`compare`. |
 | `install/ApkDownloader.kt` | Streaming download with progress; scans HTML pages for `.apk` links; validates zip magic. |
 | `install/ApkInspector.kt` | Reads package name/version/label; picks splits from `.xapk`/`.apks`; `InstalledApps` lookup. |
 | `install/ApkInstaller.kt` | `PackageInstaller` session install; result goes to `InstallResultReceiver`. |
@@ -77,6 +78,13 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   the background. Interactive runs ("Update all now", "Install now") install one app at a time,
   waiting for each result (`awaitInstallResult`). `runInstall` always prefers a waiting `readyFile`;
   stale ones (older than installed, or not the latest GitHub tag) are discarded.
+- **Link change detection:** each download records a `RemoteFingerprint` (ETag, Last-Modified, size,
+  host+path without query) as `pendingFingerprint`; `onInstallSucceeded` promotes it to `fingerprint`.
+  `checkLink` probes the server and stores `remoteFingerprint`/`remoteChange` (CHANGED / UNCHANGED /
+  UNKNOWN). `RemoteProbe.compare` trusts ETag/date; size/address alone can only prove a change. With
+  the `updateOnlyIfChanged` setting, `prepareUpdate` skips links only when the result is UNCHANGED;
+  UNKNOWN still downloads and compares versionCode (and then records the download as the new baseline).
+  `checkAll` covers GitHub entries and installed links; `VersionUtils.updateAvailable` drives the card.
 - **Self-update:** `MainActivity.onCreate` (fresh start only) → `controller.checkSelfUpdateOnLaunch()`
   (skipped when the *checkSelfUpdates* setting is off) looks up `BuildConfig.UPDATE_REPO`'s releases
   for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one

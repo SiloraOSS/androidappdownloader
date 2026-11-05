@@ -16,6 +16,9 @@ import io.github.edrock200.appdownloader.install.InstalledApps
 import io.github.edrock200.appdownloader.install.NotAnApkException
 import io.github.edrock200.appdownloader.net.AftvResolver
 import io.github.edrock200.appdownloader.net.GitHubClient
+import io.github.edrock200.appdownloader.net.RemoteChange
+import io.github.edrock200.appdownloader.net.RemoteFingerprint
+import io.github.edrock200.appdownloader.net.RemoteProbe
 import io.github.edrock200.appdownloader.work.Notifications
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CancellationException
@@ -143,6 +146,7 @@ class AppController(
                     packageName = info.packageName,
                     name = if (useLabel) info.label!! else e.name,
                     autoName = e.autoName && !useLabel,
+                    pendingFingerprint = info.fingerprint,
                 )
             }
 
@@ -169,7 +173,7 @@ class AppController(
         }
         val result = ApkDownloader.download(url, dir, opId) { p -> setOp(opId, OpState.Downloading(p)) }
         val info = withContext(Dispatchers.IO) { ApkInspector.inspect(context, result.file) }
-        return DownloadedApk(result.file, info)
+        return DownloadedApk(result.file, info, result.fingerprint)
     }
 
     private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false) {
@@ -207,7 +211,7 @@ class AppController(
     private fun AppEntry.clearReady() =
         copy(readyFile = null, readyVersionName = null, readyVersionCode = null, readyTag = null)
 
-    private class DownloadedApk(val file: File, val info: ApkInfo) {
+    private class DownloadedApk(val file: File, val info: ApkInfo, val fingerprint: RemoteFingerprint? = null) {
         val packageName get() = info.packageName
         val label get() = info.label
     }
@@ -222,7 +226,12 @@ class AppController(
         setOp(entryId, null)
         scope.launch {
             repository.update(entryId) { e ->
+                val installedFp = e.pendingFingerprint
                 e.clearReady().copy(
+                    fingerprint = installedFp ?: e.fingerprint,
+                    pendingFingerprint = null,
+                    remoteChange = if (installedFp != null) RemoteChange.UNCHANGED else e.remoteChange,
+                    remoteFingerprint = installedFp ?: e.remoteFingerprint,
                     installedTag = releaseTag ?: e.installedTag,
                     installedVersionCode = versionCode.takeIf { it >= 0 } ?: e.installedVersionCode,
                     notifiedTag = releaseTag ?: e.notifiedTag,
@@ -298,14 +307,46 @@ class AppController(
     }
 
     /** Checks all GitHub entries sequentially. Returns entries that now have an update. */
-    suspend fun checkAllGitHub(): List<AppEntry> {
-        repository.entries.value.filter { it.type == SourceType.GITHUB }.forEach { checkGitHub(it) }
+    /**
+     * Asks the server whether a link / aftv entry's file changed since the installed copy was
+     * downloaded, without downloading it, and stores the result.
+     */
+    suspend fun checkLink(entry: AppEntry, resolvedUrl: String? = null): AppEntry {
+        if (entry.type == SourceType.GITHUB) return entry
+        val now = System.currentTimeMillis()
+        try {
+            val url = resolvedUrl ?: when (entry.type) {
+                SourceType.AFTV_CODE -> AftvResolver.resolve(entry.source)
+                else -> entry.source
+            }
+            val remote = RemoteProbe.fingerprint(url)
+            val change = RemoteProbe.compare(entry.fingerprint, remote)
+            repository.update(entry.id) {
+                it.copy(remoteFingerprint = remote, remoteChange = change, remoteCheckedAt = now, lastCheckError = null)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            repository.update(entry.id) { it.copy(remoteCheckedAt = now, lastCheckError = e.message ?: "Check failed") }
+        }
+        return repository.get(entry.id) ?: entry
+    }
+
+    /** Checks GitHub releases and link changes for every entry. Returns entries that have an update. */
+    suspend fun checkAll(): List<AppEntry> {
+        repository.entries.value.forEach { entry ->
+            when {
+                entry.type == SourceType.GITHUB -> checkGitHub(entry)
+                // Only installed links are worth checking: there is nothing to compare otherwise.
+                InstalledApps.get(context, entry.packageName) != null -> checkLink(entry)
+            }
+        }
         return entriesWithUpdates()
     }
 
     fun entriesWithUpdates(): List<AppEntry> = repository.entries.value.filter { e ->
-        e.type == SourceType.GITHUB && InstalledApps.get(context, e.packageName).let { installed ->
-            VersionUtils.hasUpdate(e, installed?.versionName, installed?.versionCode)
+        InstalledApps.get(context, e.packageName).let { installed ->
+            VersionUtils.updateAvailable(e, installed?.versionName, installed?.versionCode)
         }
     }
 
@@ -314,8 +355,8 @@ class AppController(
         scope.launch {
             _checking.value = true
             try {
-                val updates = checkAllGitHub()
-                val errors = repository.entries.value.count { it.type == SourceType.GITHUB && it.lastCheckError != null }
+                val updates = checkAll()
+                val errors = repository.entries.value.count { it.lastCheckError != null }
                 _messages.tryEmit(
                     buildString {
                         append(
@@ -339,9 +380,18 @@ class AppController(
         val entry = repository.get(entryId) ?: return
         scope.launch {
             setOp(entryId, OpState.Resolving)
-            val updated = checkGitHub(entry)
+            val updated = if (entry.type == SourceType.GITHUB) checkGitHub(entry) else checkLink(entry)
             setOp(entryId, null)
-            updated.lastCheckError?.let { _messages.tryEmit("${updated.name}: $it") }
+            when {
+                updated.lastCheckError != null -> _messages.tryEmit("${updated.name}: ${updated.lastCheckError}")
+                updated.type != SourceType.GITHUB -> _messages.tryEmit(
+                    "${updated.name}: " + when (updated.remoteChange) {
+                        RemoteChange.CHANGED -> "the file has changed since you installed it"
+                        RemoteChange.UNCHANGED -> "no change since you installed it"
+                        else -> "the website doesn't say whether the file changed"
+                    }
+                )
+            }
         }
     }
 
@@ -445,8 +495,18 @@ class AppController(
 
         setOp(entryId, OpState.Resolving)
         val url = when (entry.type) {
-            SourceType.URL -> entry.source
-            SourceType.AFTV_CODE -> AftvResolver.resolve(entry.source)
+            SourceType.URL, SourceType.AFTV_CODE -> {
+                val url = if (entry.type == SourceType.AFTV_CODE) AftvResolver.resolve(entry.source) else entry.source
+                if (settings.current.updateOnlyIfChanged) {
+                    entry = checkLink(entry, url)
+                    // Only skip when the server says so; "can't tell" still downloads and compares versions.
+                    if (entry.remoteChange == RemoteChange.UNCHANGED) {
+                        setOp(entryId, null)
+                        return null
+                    }
+                }
+                url
+            }
             SourceType.GITHUB -> {
                 entry = checkGitHub(entry)
                 entry.lastCheckError?.let { throw IOException(it) }
@@ -475,6 +535,12 @@ class AppController(
         val tag = if (entry.type == SourceType.GITHUB) entry.latestTag else null
         if (apk.info.versionCode <= installed.versionCode) {
             withContext(Dispatchers.IO) { apk.file.delete() }
+            if (tag == null && apk.fingerprint != null) {
+                // Nothing newer in this file: use it as the baseline for future change checks.
+                repository.update(entryId) {
+                    it.copy(fingerprint = apk.fingerprint, remoteFingerprint = apk.fingerprint, remoteChange = RemoteChange.UNCHANGED)
+                }
+            }
             if (tag != null && apk.info.versionCode == installed.versionCode) {
                 // Same build under a new tag: remember it so it isn't offered again.
                 repository.update(entryId) { it.copy(installedTag = tag, installedVersionCode = installed.versionCode) }
@@ -487,6 +553,7 @@ class AppController(
                 readyVersionName = apk.info.versionName,
                 readyVersionCode = apk.info.versionCode,
                 readyTag = tag,
+                pendingFingerprint = apk.fingerprint,
             )
         }
         return apk
