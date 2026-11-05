@@ -38,6 +38,23 @@ object Schedule {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
+    /** [day] moved by [days] calendar days (wall-clock safe). */
+    fun addDays(day: Long, days: Int, zone: TimeZone = TimeZone.getDefault()): Long =
+        Calendar.getInstance(zone).apply { timeInMillis = day; add(Calendar.DAY_OF_YEAR, days) }.timeInMillis
+
+    /** Whole calendar days from the day of [now] to the day of [target] (0 = same day). */
+    fun daysFromToday(target: Long, now: Long, zone: TimeZone = TimeZone.getDefault()): Int {
+        var day = atTime(now, 12, 0, zone)
+        val goal = atTime(target, 12, 0, zone)
+        var n = 0
+        if (goal < day) return 0
+        while (day < goal && n < 366) {
+            day = addDays(day, 1, zone)
+            n++
+        }
+        return n
+    }
+
     /** Default suggestion: the next 3:00 AM. */
     fun defaultTime(now: Long, zone: TimeZone = TimeZone.getDefault()): Long {
         val today = atTime(now, 3, 0, zone)

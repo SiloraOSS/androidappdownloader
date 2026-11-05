@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The schedule now asks for a day of the week ("Today", "Tomorrow", "Saturday"…) instead of a
+  calendar date, and only for one-off and weekly schedules. Daily and hourly schedules just need a time.
+
 ## [1.4.0] - 2026-11-05
 
 ### Added

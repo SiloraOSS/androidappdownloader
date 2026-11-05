@@ -19,7 +19,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -51,18 +50,22 @@ fun ScheduleDialog(
 ) {
     val context = LocalContext.current
     val start = initialRunTime(initialAt)
-    var day by rememberSaveable { mutableLongStateOf(start) }
+    val now = System.currentTimeMillis()
+    // 0 = today … 6 = six days from now; shown as "Today (Thursday)", "Tomorrow (Friday)", "Saturday", …
+    var dayOffset by rememberSaveable { mutableIntStateOf(Schedule.daysFromToday(start, now).coerceIn(0, 6)) }
     var hour by rememberSaveable { mutableIntStateOf(Calendar.getInstance().apply { timeInMillis = start }.get(Calendar.HOUR_OF_DAY)) }
     var minute by rememberSaveable { mutableIntStateOf(Calendar.getInstance().apply { timeInMillis = start }.get(Calendar.MINUTE) / 5 * 5) }
     var repeat by rememberSaveable { mutableStateOf(initialRepeat) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // The day only matters for a one-off or weekly run; otherwise start at the next occurrence of the time.
+    val showDay = repeat == Repeat.ONCE || repeat == Repeat.WEEKLY
+    val day = Schedule.addDays(now, if (showDay) dayOffset else 0)
     val at = Schedule.atTime(day, hour, minute)
-    val today = Schedule.atTime(System.currentTimeMillis(), 0, 0)
-    val isToday = Schedule.atTime(day, 0, 0) <= today
+    val firstRun = Schedule.nextRun(at, repeat, now)
 
     fun shiftDay(by: Int) {
-        day = Calendar.getInstance().apply { timeInMillis = day; add(Calendar.DAY_OF_YEAR, by) }.timeInMillis
+        dayOffset = (dayOffset + by + 7) % 7
         error = null
     }
 
@@ -74,17 +77,18 @@ fun ScheduleDialog(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Date", style = MaterialTheme.typography.titleSmall)
-                Stepper(
-                    value = formatDate(day),
-                    onDecrease = { shiftDay(-1) },
-                    onIncrease = { shiftDay(1) },
-                    decreaseLabel = "Previous day",
-                    increaseLabel = "Next day",
-                    decreaseEnabled = !isToday,
-                    decreaseText = "◀",
-                    increaseText = "▶",
-                )
+                if (showDay) {
+                    Text("Day", style = MaterialTheme.typography.titleSmall)
+                    Stepper(
+                        value = dayLabel(dayOffset, day),
+                        onDecrease = { shiftDay(-1) },
+                        onIncrease = { shiftDay(1) },
+                        decreaseLabel = "Previous day",
+                        increaseLabel = "Next day",
+                        decreaseText = "◀",
+                        increaseText = "▶",
+                    )
+                }
 
                 Text("Time", style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -105,12 +109,13 @@ fun ScheduleDialog(
                     )
                 }
                 Text(
-                    if (repeat.isHourly) {
-                        "Starts ${formatDateTime(context, at)}, then ${repeat.label.lowercase()}"
-                    } else {
-                        "Runs ${formatDateTime(context, at)}"
+                    when {
+                        firstRun == null -> "That time has already passed today"
+                        repeat == Repeat.ONCE -> "Runs ${formatDateTime(context, firstRun)}"
+                        else -> "Runs ${formatDateTime(context, firstRun)}, then ${repeat.label.lowercase()}"
                     },
                     style = MaterialTheme.typography.bodyMedium,
+                    color = if (firstRun == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
 
                 Text("Repeat", style = MaterialTheme.typography.titleSmall)
@@ -196,11 +201,19 @@ private fun Stepper(
 private fun initialRunTime(initialAt: Long): Long =
     if (initialAt > System.currentTimeMillis()) initialAt else Schedule.defaultTime(System.currentTimeMillis())
 
+private fun weekday(millis: Long): String = SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(millis))
+
+private fun dayLabel(offset: Int, day: Long): String = when (offset) {
+    0 -> "Today (${weekday(day)})"
+    1 -> "Tomorrow (${weekday(day)})"
+    else -> weekday(day)
+}
+
 private fun formatDate(millis: Long): String {
-    val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMdyyyy")
+    val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMd")
     return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
 }
 
-/** e.g. "Thu, Nov 6, 2026 at 3:00 AM", using the device's 12/24-hour preference. */
+/** e.g. "Thursday, Nov 6 at 3:00 AM", using the device's 12/24-hour preference. */
 fun formatDateTime(context: Context, millis: Long): String =
     formatDate(millis) + " at " + android.text.format.DateFormat.getTimeFormat(context).format(Date(millis))

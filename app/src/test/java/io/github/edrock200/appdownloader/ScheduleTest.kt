@@ -66,6 +66,16 @@ class ScheduleTest {
     }
 
     @Test
+    fun dayOffsets() {
+        val now = t("2026-11-05 23:30") // Thursday
+        assertEquals(0, Schedule.daysFromToday(t("2026-11-05 03:00"), now, ny))
+        assertEquals(1, Schedule.daysFromToday(t("2026-11-06 00:10"), now, ny))
+        assertEquals(6, Schedule.daysFromToday(t("2026-11-11 03:00"), now, ny))
+        assertEquals(0, Schedule.daysFromToday(t("2026-11-01 03:00"), now, ny)) // Past dates count as today.
+        assertEquals("2026-11-07 23:30", f(Schedule.addDays(now, 2, ny)))
+    }
+
+    @Test
     fun atTimeAndDefault() {
         assertEquals("2026-11-07 22:45", f(Schedule.atTime(t("2026-11-07 09:13"), 22, 45, ny)))
         assertEquals("2026-11-06 03:00", f(Schedule.defaultTime(t("2026-11-05 12:00"), ny)))
