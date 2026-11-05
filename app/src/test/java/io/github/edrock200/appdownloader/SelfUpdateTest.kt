@@ -26,15 +26,12 @@ class SelfUpdateTest {
     }
 
     @Test
-    fun autoCheckRunsOnEveryLaunchButNotTooOften() {
-        val min = SelfUpdatePolicy.MIN_INTERVAL_MS
-        fun check(enabled: Boolean = true, offered: Boolean = false, running: Boolean = false, last: Long = 0, now: Long = 10 * min) =
-            SelfUpdatePolicy.shouldAutoCheck(enabled, offered, running, last, now)
-        assertEquals(true, check()) // First launch.
-        assertEquals(true, check(last = 8 * min)) // Reopened later: checks again.
-        assertEquals(false, check(last = 10 * min - 1000)) // Reopened a moment after a successful check.
-        assertEquals(false, check(enabled = false)) // Turned off in Settings.
-        assertEquals(false, check(offered = true)) // Update dialog already showing / installing.
+    fun autoCheckRunsOnEveryLaunch() {
+        fun check(enabled: Boolean = true, offered: Boolean = false, running: Boolean = false) =
+            SelfUpdatePolicy.shouldAutoCheck(enabled, offered, running)
+        assertEquals(true, check()) // Every launch while the tick box is on.
+        assertEquals(false, check(enabled = false)) // Tick box off.
+        assertEquals(false, check(offered = true)) // Prompt already showing / update installing.
         assertEquals(false, check(running = true)) // A check (or its retries) is in progress.
     }
 

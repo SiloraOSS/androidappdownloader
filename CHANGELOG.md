@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-05
+
+### Changed
+- "Check for App Downloader updates each time it's opened" is now a tick box in Settings (on by
+  default). When ticked, every time you open App Downloader it checks for a new version and asks
+  whether you want to install it.
+
 ## [1.4.2] - 2026-11-05
 
 ### Fixed

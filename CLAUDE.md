@@ -89,8 +89,8 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   `checkAll` covers GitHub entries and installed links; `VersionUtils.updateAvailable` drives the card.
 - **Self-update:** `MainActivity.onStart` (every time the app comes to the foreground — TVs resume
   the singleTask activity instead of recreating it) → `controller.checkSelfUpdateOnLaunch()`
-  (skipped when the *checkSelfUpdates* setting is off, an update is already offered, or a check
-  succeeded within 10 minutes — see `SelfUpdatePolicy`; failures retry 3× at 10 s) looks up `BuildConfig.UPDATE_REPO`'s releases
+  (every launch while the *checkSelfUpdates* tick box is on; skipped only while an update is already
+  offered/installing or a check is running — see `SelfUpdatePolicy`; failures retry 3× at 10 s) looks up `BuildConfig.UPDATE_REPO`'s releases
   for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one
   sets `controller.selfUpdate`, shown by `SelfUpdateDialog`; installing it reuses the download/install
   pipeline under the op id `AppController.SELF_UPDATE_ID` and refuses APKs with another package name.

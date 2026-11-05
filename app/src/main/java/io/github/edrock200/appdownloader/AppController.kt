@@ -67,17 +67,12 @@ data class UpdateRunSummary(
 
 /** When the automatic "is there a newer App Downloader?" check should run (pure, for tests). */
 object SelfUpdatePolicy {
-    const val MIN_INTERVAL_MS = 10 * 60_000L
     const val ATTEMPTS = 3
     const val RETRY_DELAY_MS = 10_000L
 
-    fun shouldAutoCheck(
-        enabled: Boolean,
-        updateOffered: Boolean,
-        checkRunning: Boolean,
-        lastSuccessAt: Long,
-        now: Long,
-    ): Boolean = enabled && !updateOffered && !checkRunning && now - lastSuccessAt >= MIN_INTERVAL_MS
+    /** Every launch, unless turned off or an update prompt / install / check is already in progress. */
+    fun shouldAutoCheck(enabled: Boolean, updateOffered: Boolean, checkRunning: Boolean): Boolean =
+        enabled && !updateOffered && !checkRunning
 }
 
 /** A newer release of App Downloader itself. */
@@ -588,24 +583,19 @@ class AppController(
     val selfUpdate: StateFlow<SelfUpdate?> = _selfUpdate.asStateFlow()
 
     /** Called when the app is opened; checks only if the user hasn't turned it off. */
-    /** When the last self-update check succeeded, to avoid re-checking on every screen change. */
-    private var lastSelfCheckAt = 0L
     private var selfCheckJob: Job? = null
 
     /**
-     * Called whenever the app comes to the foreground (TVs usually resume the app rather than
-     * restart it). Skipped when turned off, when an update is already offered or installing, or
-     * when a check succeeded recently. Retries a couple of times because the network is often
-     * not up yet right after a TV wakes from standby.
+     * Called every time the app is opened, including when it is brought back from the background
+     * (TVs usually resume the app rather than restart it). Skipped when the tick box is off or an
+     * update prompt / install / check is already in progress. Retries a couple of times because the
+     * network is often not up yet right after a TV wakes from standby.
      */
     fun checkSelfUpdateOnLaunch() {
-        val now = System.currentTimeMillis()
         if (!SelfUpdatePolicy.shouldAutoCheck(
                 enabled = settings.current.checkSelfUpdates,
                 updateOffered = _selfUpdate.value != null || isBusy(SELF_UPDATE_ID),
                 checkRunning = selfCheckJob?.isActive == true,
-                lastSuccessAt = lastSelfCheckAt,
-                now = now,
             )
         ) return
         selfCheckJob = scope.launch {
@@ -642,7 +632,6 @@ class AppController(
             } else if (manual) {
                 _messages.tryEmit("App Downloader is up to date (version $current)")
             }
-            lastSelfCheckAt = System.currentTimeMillis()
             return true
         } catch (e: CancellationException) {
             throw e

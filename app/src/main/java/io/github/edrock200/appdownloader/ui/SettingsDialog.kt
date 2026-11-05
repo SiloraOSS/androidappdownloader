@@ -11,6 +11,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -128,7 +129,11 @@ fun SettingsDialog(
                 SwitchRow("Delete APK after installing", deleteAfter) { deleteAfter = it }
                 HorizontalDivider()
                 Text("App Downloader ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleSmall)
-                SwitchRow("Check for App Downloader updates when opened", selfUpdates) { selfUpdates = it }
+                CheckboxRow(
+                    label = "Check for App Downloader updates each time it's opened",
+                    detail = "If a new version is available, you'll be asked whether to install it.",
+                    checked = selfUpdates,
+                ) { selfUpdates = it }
                 OutlinedButton(onClick = onCheckSelfUpdate, modifier = Modifier.focusHighlight()) {
                     Text("Check for app update now")
                 }
@@ -178,6 +183,27 @@ fun SettingsDialog(
                 onScheduleChange(at, repeat)
             },
         )
+    }
+}
+
+/** A tick box + label (+ optional explanation) where the whole row is one focusable, toggleable target. */
+@Composable
+private fun CheckboxRow(label: String, detail: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .focusHighlight(FocusShapes.Row, scaleUp = false)
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Column(Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(label)
+            detail?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

@@ -78,7 +78,7 @@ so the installed version is tracked.
 | Check GitHub for updates | Every 12 hours | 3/6/12/24 hours, or *Never* for manual checks only |
 | GitHub token | empty | A fine-grained token with no extra permissions is enough for public repos |
 | Delete APK after installing | on | Downloaded files are kept in the app's cache otherwise |
-| Check for App Downloader updates when opened | on | Offers to install a newer version of this app. *Check for app update now* checks immediately. |
+| Check for App Downloader updates each time it's opened | ticked | Every time the app is opened it checks for a newer version and asks whether to install it. *Check for app update now* checks immediately. |
 
 ### Troubleshooting
 
