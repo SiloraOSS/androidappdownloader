@@ -5,7 +5,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.edrock200.appdownloader.App
 import io.github.edrock200.appdownloader.OpState
+import android.net.Uri
+import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.data.AppEntry
+import io.github.edrock200.appdownloader.data.Backup
+import io.github.edrock200.appdownloader.data.BackupFile
+import io.github.edrock200.appdownloader.net.AftvResolver
+import io.github.edrock200.appdownloader.net.Http
+import okhttp3.Request
+import java.io.IOException
 import io.github.edrock200.appdownloader.data.Repeat
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.SourceParser
@@ -66,6 +74,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     var waitingPromptShown = false
     val settings = app.settings.state
     val messages = app.controller.messages
+
+    /** A backup that was read and is waiting for the user to confirm the restore. */
+    val pendingRestore = MutableStateFlow<BackupFile?>(null)
 
     /** Text shared into the app from another app, waiting to be added. */
     val sharedText = MutableStateFlow<String?>(null)
@@ -160,6 +171,97 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSchedule(at: Long, repeat: Repeat) {
         saveSettings(app.settings.current.copy(scheduleAt = at, scheduleRepeat = repeat))
         if (at > 0) message("Updates scheduled for ${formatDateTime(app, at)}")
+    }
+
+    // ------------------------------------------------------------ backup & restore
+
+    private fun makeBackup(includeToken: Boolean) = Backup.create(
+        entries = app.repository.entries.value,
+        settings = app.settings.current,
+        includeToken = includeToken,
+        appVersion = BuildConfig.VERSION_NAME,
+        now = System.currentTimeMillis(),
+    )
+
+    /** Text for the settings QR code (never contains the GitHub token), or null if the list is too long. */
+    fun qrText(): String? = Backup.toQrText(makeBackup(includeToken = false))
+
+    fun appCount() = app.repository.entries.value.size
+
+    fun saveBackupTo(uri: Uri, includeToken: Boolean) = viewModelScope.launch {
+        runCatching { withContext(Dispatchers.IO) { BackupStorage.write(app, uri, Backup.toJson(makeBackup(includeToken))) } }
+            .onSuccess { message("Backup saved (${appCount()} apps)") }
+            .onFailure { message("Couldn't save the backup: ${it.message}") }
+    }
+
+    fun saveBackupToDownloads(includeToken: Boolean) = viewModelScope.launch {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                BackupStorage.saveToDownloads(app, BackupStorage.fileName(), Backup.toJson(makeBackup(includeToken)))
+            }
+        }
+            .onSuccess { message("Backup saved to $it") }
+            .onFailure { message("Couldn't save the backup: ${it.message}") }
+    }
+
+    suspend fun downloadsBackups(): List<StoredBackup> =
+        withContext(Dispatchers.IO) { runCatching { BackupStorage.listDownloads(app) }.getOrDefault(emptyList()) }
+
+    fun loadBackup(uri: Uri) = viewModelScope.launch {
+        runCatching { withContext(Dispatchers.IO) { BackupStorage.read(app, uri) } }
+            .onSuccess { loadBackupText(it) }
+            .onFailure { message("Couldn't read the file: ${it.message}") }
+    }
+
+    /** From a file's contents or a scanned QR code. */
+    fun loadBackupText(text: String) {
+        runCatching { Backup.parse(text) }
+            .onSuccess { pendingRestore.value = it }
+            .onFailure { message(it.message ?: "This isn't an App Downloader backup") }
+    }
+
+    /** Downloads a backup file from a link or aftv.news code (handy on TVs). */
+    fun loadBackupFromLink(input: String) = viewModelScope.launch {
+        runCatching {
+            val parsed = SourceParser.parse(input) ?: throw IllegalArgumentException("Enter a link or an aftv.news code")
+            val url = when (parsed.type) {
+                SourceType.AFTV_CODE -> AftvResolver.resolve(parsed.source)
+                SourceType.URL -> parsed.source
+                SourceType.GITHUB -> throw IllegalArgumentException("Use the direct (\"raw\") link to the backup file")
+            }
+            withContext(Dispatchers.IO) {
+                Http.execute(Request.Builder().url(url).build()).use { response ->
+                    if (!response.isSuccessful) throw IOException("The link returned HTTP ${response.code}")
+                    val body = response.body ?: throw IOException("The link returned nothing")
+                    if (body.contentLength() > 2 * 1024 * 1024) throw IOException("That file is too large to be a backup")
+                    body.string()
+                }
+            }
+        }
+            .onSuccess { loadBackupText(it) }
+            .onFailure { message(it.message ?: "Couldn't download the backup") }
+    }
+
+    fun restore(backup: BackupFile, replace: Boolean, withSettings: Boolean) = viewModelScope.launch {
+        val existing = app.repository.entries.value
+        val result = Backup.restoreApps(existing, backup, replace)
+        if (replace) {
+            // Clean up downloads waiting for apps that are no longer in the list.
+            val keptIds = result.entries.map { it.id }.toSet()
+            existing.filter { it.id !in keptIds }.forEach { e ->
+                app.controller.clearOp(e.id)
+                e.readyFile?.let { path -> withContext(Dispatchers.IO) { File(path).delete() } }
+            }
+        }
+        app.repository.replaceAll(result.entries)
+        if (withSettings) saveSettings(Backup.restoreSettings(app.settings.current, backup.settings, System.currentTimeMillis()))
+        pendingRestore.value = null
+        message(
+            "Restored ${result.added} app${if (result.added == 1) "" else "s"}" +
+                (if (result.skipped > 0) " (${result.skipped} already in your list)" else "") +
+                (if (withSettings) " and your settings" else "")
+        )
+        app.controller.checkAllNow() // Fill in release and change information for the restored apps.
     }
 
     fun setUpdateOnlyIfChanged(enabled: Boolean) {

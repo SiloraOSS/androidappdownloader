@@ -29,6 +29,8 @@ installing them in one tap. It understands three kinds of sources:
   *Auto-update* ticked is updated then. On Android 12+ apps that App Downloader installed are
   updated silently; anything Android wants you to confirm is downloaded and waiting, and the app
   offers to install it next time you open it. *Update all now* runs the same thing immediately.
+- **Back up & restore** (Settings): save the app list and settings to a file and restore them,
+  show them as a QR code that another copy of the app scans, or restore from a link / aftv.news code.
 - Keeps itself up to date: when opened it checks this repository for a newer version and offers to
   install it. This can be turned off in Settings.
 
@@ -93,6 +95,18 @@ so the installed version is tracked.
 | Scheduled update didn't install anything | Android only allows silent updates on Android 12+ for apps App Downloader installed itself. Otherwise updates are downloaded and waiting. Open the app and choose *Install now*. Fire TV always asks to confirm. |
 | Scheduled update ran late | Android may delay background work by a few minutes to save power, and waits for a network connection. |
 | No update notifications on a TV | Many TV launchers don't show notifications. Apps with updates are highlighted at the top of the list when you open the app. |
+
+### Backing up and copying to another device
+
+| From | To | How |
+|---|---|---|
+| Any device | Same or another device | *Save backup file*, then *Restore from file*. On TVs without a file picker the file goes to the Downloads folder. |
+| TV or phone | Phone | *Show QR code* on the first device, *Scan QR code* on the phone. Scanning needs a camera and Google Play services. |
+| Phone | TV | Save a backup file on the phone, upload it somewhere with a direct download link (e.g. a GitHub Gist's *Raw* link), optionally make an aftv.news code for it, then *Restore from link or aftv.news code* on the TV. TVs have no camera, so they can't scan QR codes. |
+
+Backups contain each app's link, name, filters and auto-update choice, plus your settings. The
+GitHub token is only included in files when you tick *Include GitHub token in backup files*, and
+never in QR codes. Restoring doesn't install anything; install the apps from the list afterwards.
 
 ## Building
 
@@ -177,3 +191,4 @@ contribute. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 | `REQUEST_DELETE_PACKAGES` | The *Uninstall* menu action |
 | `QUERY_ALL_PACKAGES` | Reading the installed version of the apps you add |
 | `POST_NOTIFICATIONS` | Update notifications |
+| `READ/WRITE_EXTERNAL_STORAGE` (Android 9 and older only) | Saving and reading backups in Downloads on TVs without a file picker |

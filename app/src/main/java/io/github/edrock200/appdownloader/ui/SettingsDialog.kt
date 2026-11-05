@@ -45,6 +45,11 @@ fun SettingsDialog(
     onScheduleChange: (at: Long, repeat: Repeat) -> Unit,
     onOnlyIfChangedChange: (Boolean) -> Unit,
     onUpdateAllNow: () -> Unit,
+    onSaveBackup: (includeToken: Boolean) -> Unit,
+    onRestoreBackup: () -> Unit,
+    onShowQr: () -> Unit,
+    onScanQr: (() -> Unit)?,
+    onRestoreFromLink: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (SettingsState) -> Unit,
 ) {
@@ -54,6 +59,7 @@ fun SettingsDialog(
     var deleteAfter by rememberSaveable { mutableStateOf(current.deleteApkAfterInstall) }
     var selfUpdates by rememberSaveable { mutableStateOf(current.checkSelfUpdates) }
     var editingSchedule by rememberSaveable { mutableStateOf(false) }
+    var backupToken by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -127,6 +133,37 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 SwitchRow("Delete APK after installing", deleteAfter) { deleteAfter = it }
+                HorizontalDivider()
+                Text("Back up & restore", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Saves your list of apps and your settings, to restore later or copy to another device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (current.githubToken.isNotBlank()) {
+                    CheckboxRow(
+                        label = "Include GitHub token in backup files",
+                        detail = "Leave this off if you'll share the file. QR codes never include it.",
+                        checked = backupToken,
+                    ) { backupToken = it }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onSaveBackup(backupToken) }, modifier = Modifier.focusHighlight()) {
+                        Text("Save backup file")
+                    }
+                    OutlinedButton(onClick = onRestoreBackup, modifier = Modifier.focusHighlight()) {
+                        Text("Restore from file")
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onShowQr, modifier = Modifier.focusHighlight()) { Text("Show QR code") }
+                    if (onScanQr != null) {
+                        OutlinedButton(onClick = onScanQr, modifier = Modifier.focusHighlight()) { Text("Scan QR code") }
+                    }
+                }
+                OutlinedButton(onClick = onRestoreFromLink, modifier = Modifier.focusHighlight()) {
+                    Text("Restore from link or aftv.news code")
+                }
                 HorizontalDivider()
                 Text("App Downloader ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleSmall)
                 CheckboxRow(

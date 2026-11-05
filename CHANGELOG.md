@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-05
+
+### Added
+- Back up & restore in Settings: save your list of apps and your settings to a file, and restore
+  them later or on another device. Choose whether to add to your current list or replace it.
+- Copy everything to another device with a QR code: "Show QR code" on one device, then
+  "Scan QR code" on a phone. Your GitHub token is never put in a QR code.
+- "Restore from link or aftv.news code" loads a backup file from the internet, which is handy on
+  TVs: type the code with the remote.
+- On TVs without a file picker, backups are saved to and restored from the Downloads folder.
+
 ## [1.4.3] - 2026-11-05
 
 ### Changed

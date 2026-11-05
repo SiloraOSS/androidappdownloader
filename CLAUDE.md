@@ -48,6 +48,9 @@ All code lives in `app/src/main/java/io/github/edrock200/appdownloader/`:
 | `ui/` | `MainActivity`, `MainViewModel`, Compose screens and dialogs, `SystemActions` (intents to the system). |
 | `ui/Tv.kt` | `Modifier.focusHighlight()` (remote-friendly focus ring), `Device.isTv/isFireTv`, per-device install-permission help. |
 | `ui/SelfUpdateDialog.kt` | Prompt shown when a newer App Downloader release exists. |
+| `data/Backup.kt` | Backup format (`BackupFile`/`BackupApp`/`BackupSettings`), JSON + QR (`ADBK1:` + base64url(gzip(json))) encoding, pure merge/replace (`restoreApps`) and `restoreSettings`. |
+| `ui/BackupStorage.kt` | SAF read/write, Downloads fallback (MediaStore on 29+, file + storage permission on ≤28) for TVs without a file picker, `canScanQr`. |
+| `ui/BackupDialogs.kt`, `ui/QrCode.kt` | Show-QR (ZXing 3.3.3 → Canvas), restore confirmation, restore-from-link, Downloads picker. Scanning uses Play services' `GmsBarcodeScanning` (no camera permission). |
 | `.github/workflows/android.yml` | CI: tests, builds, signs, publishes tagged releases, announces on Discord. |
 | `.github/scripts/` | `release-notes.sh` (CHANGELOG section → plain-language notes), `discord-notify.sh`. |
 
@@ -87,6 +90,12 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   the `updateOnlyIfChanged` setting, `prepareUpdate` skips links only when the result is UNCHANGED;
   UNKNOWN still downloads and compares versionCode (and then records the download as the new baseline).
   `checkAll` covers GitHub entries and installed links; `VersionUtils.updateAvailable` drives the card.
+- **Backup & restore:** `MainViewModel` builds `Backup.create(...)` (only user-set fields; token only when
+  asked, never in QR), writes via SAF or `BackupStorage.saveToDownloads`, and reads from SAF, Downloads,
+  a scanned QR or a link/aftv code into `pendingRestore`, which `RestoreDialog` confirms. `restore`
+  merges or replaces via `Backup.restoreApps` (keeping ids of matching entries), `repository.replaceAll`,
+  optionally `saveSettings(Backup.restoreSettings(...))` (re-applies both schedulers), then `checkAllNow`.
+  Bump `BackupFile.version` (and teach `Backup.parse`) for incompatible format changes.
 - **Self-update:** `MainActivity.onStart` (every time the app comes to the foreground — TVs resume
   the singleTask activity instead of recreating it) → `controller.checkSelfUpdateOnLaunch()`
   (every launch while the *checkSelfUpdates* tick box is on; skipped only while an update is already

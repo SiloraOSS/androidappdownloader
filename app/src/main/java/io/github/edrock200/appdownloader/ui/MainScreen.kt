@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,7 +51,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import io.github.edrock200.appdownloader.AppController
+import kotlinx.coroutines.launch
 import io.github.edrock200.appdownloader.data.AppEntry
 import io.github.edrock200.appdownloader.data.SourceType
 
@@ -69,6 +74,40 @@ fun MainScreen(vm: MainViewModel) {
     var showWaitingPrompt by rememberSaveable { mutableStateOf(false) }
     val waitingItems = items.filter { it.waiting && it.op == null }
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // ---- Backup & restore state ----
+    val pendingRestore by vm.pendingRestore.collectAsStateWithLifecycle()
+    var qrText by remember { mutableStateOf<String?>(null) }
+    var showRestoreLink by rememberSaveable { mutableStateOf(false) }
+    var downloadsBackups by remember { mutableStateOf<List<StoredBackup>?>(null) }
+    var backupIncludeToken by remember { mutableStateOf(false) }
+    var afterStoragePermission by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val createBackupFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { vm.saveBackupTo(it, backupIncludeToken) }
+    }
+    val openBackupFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { vm.loadBackup(it) }
+    }
+    val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) afterStoragePermission?.invoke()
+        else vm.message("App Downloader needs storage access to save or read backups on this device")
+        afterStoragePermission = null
+    }
+    fun withStorage(action: () -> Unit) {
+        if (BackupStorage.needsStoragePermission(context)) {
+            afterStoragePermission = action
+            storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            action()
+        }
+    }
+    fun scanQr() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { code -> code.rawValue?.let(vm::loadBackupText) }
+            .addOnFailureListener { vm.message("Couldn't scan: ${it.message}") }
+    }
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<AppEntry?>(null) }
@@ -295,6 +334,17 @@ fun MainScreen(vm: MainViewModel) {
         )
     }
 
+    BackupDialogs(
+        vm = vm,
+        qrText = qrText,
+        onQrDismiss = { qrText = null },
+        pendingRestore = pendingRestore,
+        showRestoreLink = showRestoreLink,
+        onRestoreLinkDismiss = { showRestoreLink = false },
+        downloadsBackups = downloadsBackups,
+        onDownloadsDismiss = { downloadsBackups = null },
+    )
+
     if (showSettings) {
         SettingsDialog(
             current = settings,
@@ -309,6 +359,50 @@ fun MainScreen(vm: MainViewModel) {
                 showSettings = false
                 install(UPDATE_ALL_ID)
             },
+            onSaveBackup = { includeToken ->
+                showSettings = false
+                backupIncludeToken = includeToken
+                if (BackupStorage.hasFilePicker(context)) {
+                    createBackupFile.launch(BackupStorage.fileName())
+                } else {
+                    withStorage { vm.saveBackupToDownloads(includeToken) }
+                }
+            },
+            onRestoreBackup = {
+                showSettings = false
+                if (BackupStorage.hasFilePicker(context)) {
+                    openBackupFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
+                } else {
+                    withStorage {
+                        scope.launch {
+                            val found = vm.downloadsBackups()
+                            if (found.isEmpty()) {
+                                vm.message("No backups found in Downloads. Save one first, or restore from a link.")
+                            } else {
+                                downloadsBackups = found
+                            }
+                        }
+                    }
+                }
+            },
+            onShowQr = {
+                val text = vm.qrText()
+                if (text == null) {
+                    vm.message("Too many apps to fit in one QR code. Use a backup file instead.")
+                } else {
+                    showSettings = false
+                    qrText = text
+                }
+            },
+            onScanQr = if (remember { BackupStorage.canScanQr(context) }) {
+                { showSettings = false; scanQr() }
+            } else {
+                null
+            },
+            onRestoreFromLink = {
+                showSettings = false
+                showRestoreLink = true
+            },
             onDismiss = { showSettings = false },
             onSave = {
                 vm.saveSettings(it)
@@ -317,6 +411,37 @@ fun MainScreen(vm: MainViewModel) {
                     askForNotifications()
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun BackupDialogs(
+    vm: MainViewModel,
+    qrText: String?,
+    onQrDismiss: () -> Unit,
+    pendingRestore: io.github.edrock200.appdownloader.data.BackupFile?,
+    showRestoreLink: Boolean,
+    onRestoreLinkDismiss: () -> Unit,
+    downloadsBackups: List<StoredBackup>?,
+    onDownloadsDismiss: () -> Unit,
+) {
+    qrText?.let { ShowQrDialog(it, vm.appCount(), onQrDismiss) }
+    if (showRestoreLink) {
+        RestoreLinkDialog(onDismiss = onRestoreLinkDismiss) { input ->
+            onRestoreLinkDismiss()
+            vm.loadBackupFromLink(input)
+        }
+    }
+    downloadsBackups?.let { list ->
+        DownloadsBackupDialog(list, onPick = { onDownloadsDismiss(); vm.loadBackup(it.uri) }, onDismiss = onDownloadsDismiss)
+    }
+    pendingRestore?.let { backup ->
+        RestoreDialog(
+            backup = backup,
+            currentCount = vm.appCount(),
+            onDismiss = { vm.pendingRestore.value = null },
+            onRestore = { replace, withSettings -> vm.restore(backup, replace, withSettings) },
         )
     }
 }

@@ -31,6 +31,9 @@ class EntryRepository(context: Context) {
 
     suspend fun delete(id: String) = mutate { list -> list.filterNot { it.id == id } }
 
+    /** Replaces the whole list (used when restoring a backup). */
+    suspend fun replaceAll(entries: List<AppEntry>) = mutate { entries }
+
     private suspend fun mutate(block: (List<AppEntry>) -> List<AppEntry>) = mutex.withLock {
         val updated = block(_entries.value)
         _entries.value = updated
