@@ -6,15 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.4.0] - 2026-11-05
-
-### Added
-- Scheduled updates can now also repeat throughout the day: every 1, 2, 4, 8 or 12 hours,
-  starting from the time you pick.
+## [1.4.1] - 2026-11-05
 
 ### Changed
 - The schedule now asks for a day of the week ("Today", "Tomorrow", "Saturday"…) instead of a
   calendar date, and only for one-off and weekly schedules. Daily and hourly schedules just need a time.
+
+## [1.4.0] - 2026-11-05
+
+### Added
+- Scheduled updates can now also repeat throughout the day: every 1, 2, 4, 8 or 12 hours,
+  starting from the date and time you pick.
 
 ## [1.3.0] - 2026-11-05
 
