@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-06
+
 ### Added
 - "Update history" in each app's ⋮ menu shows the date and time of every install and update and
   which version it went to, for example "Updated 1.2.0 → 1.3.0". Scheduled updates are marked
