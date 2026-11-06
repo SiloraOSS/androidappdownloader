@@ -83,14 +83,19 @@ object ApkInspector {
     }
 }
 
-data class InstalledInfo(val versionName: String?, val versionCode: Long)
+data class InstalledInfo(
+    val versionName: String?,
+    val versionCode: Long,
+    /** When Android says this version was installed (PackageInfo.lastUpdateTime). */
+    val installedAt: Long = 0,
+)
 
 object InstalledApps {
     fun get(context: Context, packageName: String?): InstalledInfo? {
         if (packageName.isNullOrBlank()) return null
         return try {
             val info = context.packageManager.getPackageInfo(packageName, 0)
-            InstalledInfo(info.versionName, PackageInfoCompat.getLongVersionCode(info))
+            InstalledInfo(info.versionName, PackageInfoCompat.getLongVersionCode(info), info.lastUpdateTime)
         } catch (e: PackageManager.NameNotFoundException) {
             null
         }

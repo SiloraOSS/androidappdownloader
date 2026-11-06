@@ -114,6 +114,7 @@ fun MainScreen(vm: MainViewModel) {
     var showAdd by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<AppEntry?>(null) }
     var deleting by remember { mutableStateOf<AppEntry?>(null) }
+    var historyFor by rememberSaveable { mutableStateOf<String?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var pendingInstallId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -227,6 +228,7 @@ fun MainScreen(vm: MainViewModel) {
                             onEdit = { editing = item.entry },
                             onDelete = { deleting = item.entry },
                             onAutoUpdateChange = { vm.setAutoUpdate(item.entry.id, it) },
+                            onHistory = { historyFor = item.entry.id },
                             onMessage = vm::message,
                         )
                     }
@@ -268,6 +270,11 @@ fun MainScreen(vm: MainViewModel) {
                 vm.edit(entry, form).also { if (it == null) editing = null }
             },
         )
+    }
+
+    historyFor?.let { id ->
+        val entry = items.firstOrNull { it.entry.id == id }?.entry
+        if (entry == null) historyFor = null else HistoryDialog(entry, onDismiss = { historyFor = null })
     }
 
     deleting?.let { entry ->

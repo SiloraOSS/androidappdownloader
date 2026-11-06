@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.pm.PackageInstaller
 import android.os.Build
 import io.github.edrock200.appdownloader.data.AppEntry
+import io.github.edrock200.appdownloader.data.History
+import io.github.edrock200.appdownloader.data.InstallRecord
 import io.github.edrock200.appdownloader.data.EntryRepository
 import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.SourceType
@@ -197,8 +199,13 @@ class AppController(
 
     private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false) {
         setOp(opId, OpState.Installing)
+        val previous = InstalledApps.get(context, apk.packageName)
         withContext(Dispatchers.IO) {
-            ApkInstaller.install(context, apk.file, apk.info, opId, releaseTag, background)
+            ApkInstaller.install(
+                context, apk.file, apk.info, opId, releaseTag, background,
+                previousVersionName = previous?.versionName,
+                previousVersionCode = previous?.versionCode,
+            )
         }
     }
 
@@ -241,12 +248,26 @@ class AppController(
         versionCode: Long,
         filePath: String?,
         background: Boolean = false,
+        previousVersionName: String? = null,
+        previousVersionCode: Long? = null,
     ) {
         setOp(entryId, null)
         scope.launch {
+            val nowInstalled = InstalledApps.get(context, repository.get(entryId)?.packageName)
+            val record = InstallRecord(
+                at = System.currentTimeMillis(),
+                versionName = nowInstalled?.versionName,
+                versionCode = versionCode.takeIf { it >= 0 } ?: nowInstalled?.versionCode ?: 0,
+                previousVersionName = previousVersionName,
+                previousVersionCode = previousVersionCode,
+                tag = releaseTag,
+                kind = History.kindOf(previousVersionCode, versionCode.takeIf { it >= 0 } ?: nowInstalled?.versionCode ?: 0),
+                automatic = background,
+            )
             repository.update(entryId) { e ->
                 val installedFp = e.pendingFingerprint
                 e.clearReady().copy(
+                    history = History.recordInstall(e.history, record),
                     fingerprint = installedFp ?: e.fingerprint,
                     pendingFingerprint = null,
                     remoteChange = if (installedFp != null) RemoteChange.UNCHANGED else e.remoteChange,
@@ -369,6 +390,20 @@ class AppController(
         }
     }
 
+    /**
+     * Adds history records for version changes made outside App Downloader (or, for apps that have
+     * no history yet, the version currently installed). Skips apps that are being installed now.
+     */
+    suspend fun syncHistoryWithDevice() {
+        for (entry in repository.entries.value) {
+            if (isBusy(entry.id)) continue
+            val pkg = entry.packageName ?: continue
+            val installed = InstalledApps.get(context, pkg) ?: continue
+            val updated = History.syncWithDevice(entry.history, installed.versionName, installed.versionCode, installed.installedAt)
+            if (updated !== entry.history) repository.update(entry.id) { it.copy(history = updated) }
+        }
+    }
+
     /** When the last full check of all apps finished. */
     private var lastFullCheckAt = 0L
 
@@ -378,6 +413,7 @@ class AppController(
      * switching in and out of the app doesn't use up GitHub's request limit.
      */
     fun checkAllOnLaunch() {
+        scope.launch { syncHistoryWithDevice() }
         if (!UpdateCheckPolicy.shouldCheckOnLaunch(_checking.value, lastFullCheckAt, System.currentTimeMillis())) return
         checkAllNow(quiet = true)
     }

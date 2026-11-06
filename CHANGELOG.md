@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- "Update history" in each app's ⋮ menu shows the date and time of every install and update and
+  which version it went to, for example "Updated 1.2.0 → 1.3.0". Scheduled updates are marked
+  "automatic". Updates made outside App Downloader (for example by the Play Store) are noticed
+  when you open the app. Apps added before this version start with the version currently installed.
+
 ## [1.6.0] - 2026-11-05
 
 ### Added

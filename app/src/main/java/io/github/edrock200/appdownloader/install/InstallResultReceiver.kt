@@ -43,6 +43,8 @@ class InstallResultReceiver : BroadcastReceiver() {
                 versionCode = intent.getLongExtra(ApkInstaller.EXTRA_VERSION_CODE, -1),
                 filePath = intent.getStringExtra(ApkInstaller.EXTRA_FILE),
                 background = background,
+                previousVersionName = intent.getStringExtra(ApkInstaller.EXTRA_PREV_VERSION_NAME),
+                previousVersionCode = intent.getLongExtra(ApkInstaller.EXTRA_PREV_VERSION_CODE, -1L).takeIf { it >= 0 },
             )
             else -> controller.onInstallFailed(
                 entryId,

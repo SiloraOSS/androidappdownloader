@@ -57,6 +57,7 @@ fun EntryCard(
     onCheck: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onHistory: () -> Unit,
     onAutoUpdateChange: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
 ) {
@@ -115,7 +116,7 @@ fun EntryCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                OverflowMenu(item, onCheck, onEdit, onDelete, onMessage)
+                OverflowMenu(item, onCheck, onEdit, onDelete, onHistory, onMessage)
             }
 
             Spacer(Modifier.height(8.dp))
@@ -262,6 +263,7 @@ private fun OverflowMenu(
     onCheck: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onHistory: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -290,6 +292,7 @@ private fun OverflowMenu(
                     if (!SystemActions.openUrl(context, url)) onMessage("No browser available")
                 })
             }
+            DropdownMenuItem(text = { Text("Update history") }, modifier = itemModifier, onClick = { open = false; onHistory() })
             DropdownMenuItem(text = { Text("Edit") }, modifier = itemModifier, onClick = { open = false; onEdit() })
             if (item.installed != null && entry.packageName != null) {
                 DropdownMenuItem(text = { Text("Uninstall app") }, modifier = itemModifier, onClick = {

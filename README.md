@@ -18,6 +18,7 @@ installing them in one tap. It understands three kinds of sources:
 - Picks the right release asset for the device's CPU (arm64-v8a, armeabi-v7a, x86, x86_64, universal). An optional per-repo filter (text or regex, e.g. `universal` or `fdroid.*\.apk`) handles repos with several flavours; pre-releases can be included per repo.
 - Installs plain `.apk` files and split bundles (`.xapk`, `.apks`) through Android's PackageInstaller.
 - Open, uninstall, re-download or edit any saved app; share a link from another app to add it.
+- **Update history** (⋮ menu): date, time and version of every install and update of each app.
 - Optional GitHub personal access token (Settings) to raise the API rate limit from 60 to 5,000 requests/hour and to reach private repositories.
 - Built for TV remotes on Fire TV, Android TV and Google TV: it appears in the TV launcher, the
   selected button is clearly outlined, there's extra margin for TV overscan, and options that need a

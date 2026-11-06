@@ -67,4 +67,7 @@ data class AppEntry(
     val remoteCheckedAt: Long? = null,
     /** [RemoteFingerprint.key] we already notified about. */
     val notifiedChangeKey: String? = null,
+
+    /** Installs and updates of this app on this device, newest first (see [History]). */
+    val history: List<InstallRecord> = emptyList(),
 )

@@ -48,6 +48,7 @@ All code lives in `app/src/main/java/io/github/edrock200/appdownloader/`:
 | `ui/` | `MainActivity`, `MainViewModel`, Compose screens and dialogs, `SystemActions` (intents to the system). |
 | `ui/Tv.kt` | `Modifier.focusHighlight()` (remote-friendly focus ring), `Device.isTv/isFireTv`, per-device install-permission help. |
 | `ui/SelfUpdateDialog.kt` | Prompt shown when a newer App Downloader release exists. |
+| `data/History.kt`, `ui/HistoryDialog.kt` | Per-app update history (`AppEntry.history`, newest first, max 50): pure `recordInstall` / `syncWithDevice` / `describe`, and the ⋮ › Update history dialog. |
 | `data/Backup.kt` | Backup format (`BackupFile`/`BackupApp`/`BackupSettings`), JSON + QR (`ADBK1:` + base64url(gzip(json))) encoding, pure merge/replace (`restoreApps`) and `restoreSettings`. |
 | `ui/BackupStorage.kt` | SAF read/write, Downloads fallback (MediaStore on 29+, file + storage permission on ≤28) for TVs without a file picker, `canScanQr`. |
 | `ui/BackupDialogs.kt`, `ui/QrCode.kt` | Show-QR (ZXing 3.3.3 → Canvas), restore confirmation, restore-from-link, Downloads picker. Scanning uses Play services' `GmsBarcodeScanning` (no camera permission). |
@@ -73,6 +74,12 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   list's first item is `UpdateAllBar`, which calls `controller.updateEntries(ids)` for exactly the
   starred apps (regardless of the Auto-update tick box), installing one at a time via `runInstall` +
   `awaitInstallResult`. Settings' "Update all now" is different: ticked apps only (`updateSelected`).
+- **Update history:** `install()` passes the version on the device to the session (`EXTRA_PREV_VERSION_*`);
+  `onInstallSucceeded` adds an `InstallRecord` (`automatic` for background runs) via `History.recordInstall`.
+  `checkAllOnLaunch` first runs `syncHistoryWithDevice`, which records version changes made outside the
+  app (dated by `PackageInfo.lastUpdateTime`, `byApp = false`) or seeds a FOUND record; a seen-on-device
+  record within 10 minutes of the app's own record of the same version is replaced by it.
+  History is device-specific and not part of backups.
 - **Background checks:** `UpdateCheckWorker` → `checkAll()` → notify for GitHub entries whose
   `notifiedTag != latestTag` and links whose `notifiedChangeKey != remoteFingerprint.key`.
 - **Scheduled "update all":** the schedule (`scheduleAt`, `scheduleRepeat`: once, daily, weekly, or

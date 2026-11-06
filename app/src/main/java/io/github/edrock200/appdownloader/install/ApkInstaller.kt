@@ -19,6 +19,9 @@ object ApkInstaller {
     const val EXTRA_PACKAGE = "package"
     /** Set for scheduled runs: don't pop up the confirmation screen, leave the update waiting instead. */
     const val EXTRA_BACKGROUND = "background"
+    /** Version on the device before this install (for the update history); absent if not installed. */
+    const val EXTRA_PREV_VERSION_NAME = "prev_version_name"
+    const val EXTRA_PREV_VERSION_CODE = "prev_version_code"
 
     fun install(
         context: Context,
@@ -27,6 +30,8 @@ object ApkInstaller {
         entryId: String,
         releaseTag: String?,
         background: Boolean = false,
+        previousVersionName: String? = null,
+        previousVersionCode: Long? = null,
     ) {
         val installer = context.packageManager.packageInstaller
         // Drop earlier sessions for the same app that were never confirmed.
@@ -71,6 +76,8 @@ object ApkInstaller {
                 .putExtra(EXTRA_FILE, file.absolutePath)
                 .putExtra(EXTRA_PACKAGE, info.packageName)
                 .putExtra(EXTRA_BACKGROUND, background)
+                .putExtra(EXTRA_PREV_VERSION_NAME, previousVersionName)
+                .putExtra(EXTRA_PREV_VERSION_CODE, previousVersionCode ?: -1L)
             var flags = PendingIntent.FLAG_UPDATE_CURRENT
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
             val pending = PendingIntent.getBroadcast(context, sessionId, callback, flags)
