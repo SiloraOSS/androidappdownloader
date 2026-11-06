@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
   "automatic". Updates made outside App Downloader (for example by the Play Store) are noticed
   when you open the app. Apps added before this version start with the version currently installed.
 
+### Added
+- Choose Follow system, Light, or Dark under Appearance in Settings. Changes apply immediately,
+  and your choice is saved and included in backups.
+
 ## [1.6.0] - 2026-11-05
 
 ### Added

@@ -375,6 +375,7 @@ fun MainScreen(vm: MainViewModel) {
                 if (at > 0) askForNotifications()
             },
             onOnlyIfChangedChange = vm::setUpdateOnlyIfChanged,
+            onThemeModeChange = { vm.saveSettings(settings.copy(themeMode = it)) },
             onUpdateAllNow = {
                 showSettings = false
                 install(UPDATE_ALL_ID)
