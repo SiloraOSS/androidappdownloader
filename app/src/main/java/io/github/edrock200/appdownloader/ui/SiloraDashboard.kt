@@ -48,7 +48,9 @@ import androidx.compose.ui.unit.dp
 import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.OpState
 import io.github.edrock200.appdownloader.R
+import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.SettingsState
+import io.github.edrock200.appdownloader.install.ShizukuState
 
 /** Presentation only; permission handling and all update actions stay in SiloraScreen. */
 @Composable
@@ -57,6 +59,7 @@ internal fun SiloraDashboard(
     checking: Boolean,
     updatingAutomatically: Boolean,
     settings: SettingsState,
+    shizuku: ShizukuState,
     installAllowed: Boolean,
     notificationsEnabled: Boolean,
     canOpen: Boolean,
@@ -71,6 +74,7 @@ internal fun SiloraDashboard(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
     BoxWithConstraints(modifier.fillMaxSize().background(colors.background).background(Brush.verticalGradient(
         listOf(colors.primaryContainer.copy(alpha = 0.32f), colors.background, colors.background),
     ))) {
@@ -106,11 +110,11 @@ internal fun SiloraDashboard(
                 Text("The latest Silora. The right build for your device.", color = colors.onSurfaceVariant)
             }
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
-                SiloraUpdateCard(item, checking, updatingAutomatically, canOpen, isTv, compact,
+                SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
                     onInstall, onCheck, onOpen, onCancel, cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
-                SiloraPreferencesCard(settings, installAllowed, notificationsEnabled,
+                SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
                     onSettings, onInstallPermission, onNotifications, compact, cardModifier)
             }
             if (wide) {
@@ -134,7 +138,7 @@ internal fun SiloraDashboard(
 @Composable
 private fun SiloraUpdateCard(
     item: EntryUi?, checking: Boolean, updatingAutomatically: Boolean,
-    canOpen: Boolean, isTv: Boolean, compact: Boolean,
+    usingShizuku: Boolean, shizuku: ShizukuState, canOpen: Boolean, isTv: Boolean, compact: Boolean,
     onInstall: () -> Unit, onCheck: () -> Unit, onOpen: () -> Unit, onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -172,10 +176,11 @@ private fun SiloraUpdateCard(
                 val status = when {
                     op == OpState.Resolving -> "Checking the latest Silora build…"
                     op is OpState.Downloading -> op.progress?.let { "Downloading Silora… ${(it * 100).toInt()}%" } ?: "Downloading Silora…"
-                    op == OpState.Installing -> "Confirm the install when your device asks."
+                    op == OpState.Installing -> if (usingShizuku) "Installing Silora with Shizuku…" else "Confirm the install when your device asks."
                     op is OpState.Failed -> op.message
                     checking -> "Checking for updates…"
-                    item.waiting -> "An update is downloaded. Choose Install update to finish."
+                    item.waiting -> if (usingShizuku && !shizuku.ready) "An update is downloaded. ${shizuku.help}"
+                        else "An update is downloaded. Choose Install update to finish."
                     item.entry.lastCheckError != null -> item.entry.lastCheckError
                     item.hasUpdate -> "A new Silora build is ready. Update to keep watching at your best."
                     !known -> "Check for updates to get started."
@@ -276,10 +281,11 @@ private fun VersionLabel(label: String, version: String, modifier: Modifier = Mo
 
 @Composable
 private fun SiloraPreferencesCard(
-    settings: SettingsState, installAllowed: Boolean, notificationsEnabled: Boolean,
+    settings: SettingsState, shizuku: ShizukuState, installAllowed: Boolean, notificationsEnabled: Boolean,
     onSettings: () -> Unit, onInstallPermission: () -> Unit, onNotifications: () -> Unit, compact: Boolean, modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
     Card(modifier, shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.outlineVariant)) {
         Column(Modifier.padding(if (compact) 20.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp)) {
@@ -290,8 +296,15 @@ private fun SiloraPreferencesCard(
             HorizontalDivider(color = colors.outlineVariant)
             PreferenceSummary(Icons.Default.CheckCircle, "Automatic installation", if (settings.autoInstallUpdates) "On" else "Off")
             HorizontalDivider(color = colors.outlineVariant)
-            PreferenceSummary(Icons.Default.Settings, "Installation method", "Standard Android installer")
-            if (settings.autoInstallUpdates && !installAllowed) {
+            PreferenceSummary(Icons.Default.Settings, "Installation method", settings.installMethod.label)
+            if (usingShizuku) {
+                Text("Shizuku: ${shizuku.label}", style = MaterialTheme.typography.titleSmall,
+                    color = if (shizuku.ready) colors.tertiary else colors.onSurface)
+                if (!shizuku.ready) {
+                    Text(shizuku.help, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    OutlinedButton(onClick = onSettings, modifier = Modifier.focusHighlight()) { Text("Set up Shizuku") }
+                }
+            } else if (settings.autoInstallUpdates && !installAllowed) {
                 Text("Allow installs so automatic updates can finish. Downloads can wait for your confirmation.",
                     style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 OutlinedButton(onClick = onInstallPermission, modifier = Modifier.focusHighlight()) { Text("Allow installs") }
@@ -301,7 +314,8 @@ private fun SiloraPreferencesCard(
                     style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 OutlinedButton(onClick = onNotifications, modifier = Modifier.focusHighlight()) { Text("Enable notifications") }
             }
-            Text("The first install may ask you to allow Silora Updater to install apps. Follow your device's install prompts.",
+            Text(if (usingShizuku) "Shizuku must be started and Silora Updater authorized. Downloads stay ready if Shizuku stops."
+                else "The first install may ask you to allow Silora Updater to install apps. Follow your device's install prompts.",
                 style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
     }

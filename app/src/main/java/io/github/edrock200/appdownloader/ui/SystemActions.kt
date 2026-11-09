@@ -42,6 +42,9 @@ object SystemActions {
         return start(context, intent)
     }
 
+    fun openShizuku(context: Context): Boolean = launchApp(context,
+        io.github.edrock200.appdownloader.install.ShizukuManager.MANAGER_PACKAGE)
+
     fun canLaunch(context: Context, packageName: String): Boolean {
         val pm = context.packageManager
         return pm.getLaunchIntentForPackage(packageName) != null ||

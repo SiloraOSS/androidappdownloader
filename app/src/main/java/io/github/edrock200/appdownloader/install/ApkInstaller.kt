@@ -19,6 +19,8 @@ object ApkInstaller {
     const val EXTRA_PACKAGE = "package"
     /** Set for scheduled runs: don't pop up the confirmation screen, leave the update waiting instead. */
     const val EXTRA_BACKGROUND = "background"
+    const val EXTRA_KEEP_DOWNLOAD = "keep_download"
+    const val EXTRA_SHIZUKU = "shizuku_result"
     /** Version on the device before this install (for the update history); absent if not installed. */
     const val EXTRA_PREV_VERSION_NAME = "prev_version_name"
     const val EXTRA_PREV_VERSION_CODE = "prev_version_code"
@@ -69,23 +71,36 @@ object ApkInstaller {
                 }
             }
 
-            val callback = Intent(context, InstallResultReceiver::class.java)
-                .putExtra(EXTRA_ENTRY_ID, entryId)
-                .putExtra(EXTRA_TAG, releaseTag)
-                .putExtra(EXTRA_VERSION_CODE, info.versionCode)
-                .putExtra(EXTRA_FILE, file.absolutePath)
-                .putExtra(EXTRA_PACKAGE, info.packageName)
-                .putExtra(EXTRA_BACKGROUND, background)
-                .putExtra(EXTRA_PREV_VERSION_NAME, previousVersionName)
-                .putExtra(EXTRA_PREV_VERSION_CODE, previousVersionCode ?: -1L)
-            var flags = PendingIntent.FLAG_UPDATE_CURRENT
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
-            val pending = PendingIntent.getBroadcast(context, sessionId, callback, flags)
-            session.commit(pending.intentSender)
+            session.commit(resultCallback(context, sessionId, file, info, entryId, releaseTag, background,
+                previousVersionName, previousVersionCode).intentSender)
             session.close()
         } catch (e: Exception) {
             session.abandon()
             throw e
         }
+    }
+
+    /** Both installers report through the same durable, explicit PendingIntent. */
+    fun resultCallback(
+        context: Context, requestCode: Int, file: File, info: ApkInfo, entryId: String, releaseTag: String?,
+        background: Boolean, previousVersionName: String?, previousVersionCode: Long?,
+        viaShizuku: Boolean = false,
+    ): PendingIntent {
+        val callback = Intent(context, InstallResultReceiver::class.java)
+            .setData(android.net.Uri.parse("silora-updater://install/${java.util.UUID.randomUUID()}"))
+            .putExtra(EXTRA_ENTRY_ID, entryId)
+            .putExtra(EXTRA_TAG, releaseTag)
+            .putExtra(EXTRA_VERSION_CODE, info.versionCode)
+            .putExtra(EXTRA_FILE, file.absolutePath)
+            .putExtra(EXTRA_PACKAGE, info.packageName)
+            .putExtra(EXTRA_BACKGROUND, background)
+            .putExtra(EXTRA_PREV_VERSION_NAME, previousVersionName)
+            .putExtra(EXTRA_PREV_VERSION_CODE, previousVersionCode ?: -1L)
+            .putExtra(EXTRA_SHIZUKU, viaShizuku)
+            .putExtra(EXTRA_KEEP_DOWNLOAD, viaShizuku)
+        var flags = PendingIntent.FLAG_UPDATE_CURRENT
+        if (viaShizuku && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags = flags or PendingIntent.FLAG_IMMUTABLE
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE
+        return PendingIntent.getBroadcast(context, requestCode, callback, flags)
     }
 }

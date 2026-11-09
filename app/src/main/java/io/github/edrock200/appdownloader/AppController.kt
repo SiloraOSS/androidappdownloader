@@ -8,6 +8,8 @@ import io.github.edrock200.appdownloader.data.History
 import io.github.edrock200.appdownloader.data.InstallRecord
 import io.github.edrock200.appdownloader.data.EntryRepository
 import io.github.edrock200.appdownloader.data.Settings
+import io.github.edrock200.appdownloader.data.InstallMethod
+import io.github.edrock200.appdownloader.data.InstallPolicy
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.data.VersionUtils
@@ -16,6 +18,7 @@ import io.github.edrock200.appdownloader.install.ApkInfo
 import io.github.edrock200.appdownloader.install.ApkInspector
 import io.github.edrock200.appdownloader.install.ApkInstaller
 import io.github.edrock200.appdownloader.install.InstalledApps
+import io.github.edrock200.appdownloader.install.ShizukuInstaller
 import io.github.edrock200.appdownloader.install.NotAnApkException
 import io.github.edrock200.appdownloader.net.AftvResolver
 import io.github.edrock200.appdownloader.net.GitHubClient
@@ -219,6 +222,18 @@ class AppController(
             }
         }
         setOp(opId, OpState.Installing)
+        if (settings.current.installMethod == InstallMethod.SHIZUKU) {
+            // Keep manual downloads ready as well, so a lost Binder never forces a re-download.
+            repository.update(opId) { it.copy(readyFile = apk.file.absolutePath,
+                readyVersionName = apk.info.versionName, readyVersionCode = apk.info.versionCode, readyTag = releaseTag) }
+            val callback = ApkInstaller.resultCallback(context, 0, apk.file, apk.info, opId, releaseTag,
+                background, previous?.versionName, previous?.versionCode, viaShizuku = true)
+            ShizukuInstaller.install(context, apk.file, apk.info, callback.intentSender)
+            val complete = withTimeoutOrNull(15_000) { _ops.first { it[opId] != OpState.Installing } }
+                ?: throw IOException("Installation finished but no result was received. Reopen the updater to check Silora.")
+            (complete[opId] as? OpState.Failed)?.let { throw IOException(it.message) }
+            return
+        }
         withContext(Dispatchers.IO) {
             ApkInstaller.install(
                 context, apk.file, apk.info, opId, releaseTag, background,
@@ -318,14 +333,14 @@ class AppController(
     /** Entries with a downloaded update waiting to be installed. */
     fun waitingUpdates(): List<AppEntry> = repository.entries.value.filter { it.readyFile != null && !isBusy(it.id) }
 
-    fun onInstallFailed(entryId: String, status: Int, message: String?) {
+    fun onInstallFailed(entryId: String, status: Int, message: String?, keepDownload: Boolean = false) {
         if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
             setOp(entryId, null)
             _messages.tryEmit("Installation cancelled")
             return
         }
         // Don't keep offering a download that Android refused to install.
-        scope.launch { repository.update(entryId) { it.clearReady() } }
+        if (!keepDownload) scope.launch { repository.update(entryId) { it.clearReady() } }
         val reason = when (status) {
             PackageInstaller.STATUS_FAILURE_CONFLICT ->
                 "The installed app conflicts with this update, possibly because it uses a different signing key. Contact support for help."
@@ -564,7 +579,7 @@ class AppController(
      * Checks every installed app that has auto-update switched on and installs newer versions.
      * [interactive] runs happen while the user is watching, so Android's confirmation prompts
      * are shown one at a time. Scheduled runs install silently where Android allows it
-     * (Android 12+, for apps this updater installed).
+     * (Android 12+ through the standard installer, or an authorized Shizuku connection).
      */
     suspend fun updateSelected(interactive: Boolean, shouldContinue: () -> Boolean = { true }): UpdateRunSummary {
         if (!_updatingAll.compareAndSet(false, true)) return UpdateRunSummary()
@@ -598,8 +613,9 @@ class AppController(
                                 else -> waiting += entry.name // Prompt was cancelled; the download stays.
                             }
                         }
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                            io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(context) -> {
+                        InstallPolicy.canInstallInBackground(settings.current.installMethod, Build.VERSION.SDK_INT,
+                            io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(context),
+                            settings.current.installMethod == InstallMethod.SHIZUKU && context.app().shizuku.awaitReady().ready) -> {
                             install(entry.id, apk, entry.readyTag, background = true)
                             if ((InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= apk.info.versionCode)
                                 updated += entry.name

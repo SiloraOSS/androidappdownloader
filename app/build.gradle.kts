@@ -23,6 +23,7 @@ android {
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
+        testInstrumentationRunner = "io.github.edrock200.appdownloader.ShizukuDeviceCheck"
 
         // Repository the app checks for its own updates.
         buildConfigField("String", "UPDATE_REPO", "\"\"")
@@ -49,6 +50,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -56,6 +58,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        aidl = true
         compose = true
         buildConfig = true
     }
@@ -66,6 +69,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -82,6 +86,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core) // Drawing QR codes for settings transfer.
     implementation(libs.play.services.code.scanner) // Scanning them (Google's scanner UI; no camera permission).
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

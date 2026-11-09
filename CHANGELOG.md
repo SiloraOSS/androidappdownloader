@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Optional Shizuku installation with saved installer selection, authorization, live readiness,
+  and TV-friendly setup actions. Supports unattended updates on older Android / Android TV
+  while Shizuku is running and authorized, without requiring unknown-apps permission.
+- Retains downloaded updates when Shizuku is unavailable or installation needs retrying.
+  Android 5.1 continues using the Standard Android installer.
+
 ### Fixed
 - Returns to install-permission setup on Android TV when Android restarts the updater after
   changing install access. Remembers whether you were installing Silora or only setting up

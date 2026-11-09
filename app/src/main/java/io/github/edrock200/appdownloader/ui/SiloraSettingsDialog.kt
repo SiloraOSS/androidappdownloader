@@ -31,12 +31,19 @@ import io.github.edrock200.appdownloader.R
 import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.ThemeMode
+import io.github.edrock200.appdownloader.data.InstallMethod
+import io.github.edrock200.appdownloader.install.ShizukuState
 
 @Composable
 fun SiloraSettingsDialog(
     current: SettingsState,
     installAllowed: Boolean,
     notificationsEnabled: Boolean,
+    shizuku: ShizukuState,
+    onInstallMethod: (InstallMethod) -> Unit,
+    onAuthorizeShizuku: () -> Unit,
+    onOpenShizuku: () -> Unit,
+    onShizukuHelp: () -> Unit,
     onInterval: (Int) -> Unit,
     onAutomaticInstall: (Boolean) -> Unit,
     onDeleteAfterInstall: (Boolean) -> Unit,
@@ -64,15 +71,34 @@ fun SiloraSettingsDialog(
                         current.checkIntervalHours == hours) { onInterval(hours) }
                 }
                 HorizontalDivider()
-                SettingsSection("App installation")
-                Text(if (installAllowed) "Install permission: allowed" else "Install permission: needs setup",
-                    style = MaterialTheme.typography.titleSmall)
-                OutlinedButton(onClick = onInstallPermission, modifier = Modifier.focusHighlight()) { Text("Install permission settings") }
+                SettingsSection("App installation method")
+                InstallMethod.entries.forEach { method ->
+                    PreferenceChoice(method.label, current.installMethod == method,
+                        enabled = method != InstallMethod.SHIZUKU || shizuku != ShizukuState.UNSUPPORTED) { onInstallMethod(method) }
+                }
+                if (current.installMethod == InstallMethod.SHIZUKU) {
+                    Text("Shizuku: ${shizuku.label}", style = MaterialTheme.typography.titleSmall)
+                    Text(shizuku.help, style = MaterialTheme.typography.bodySmall)
+                    if (shizuku == ShizukuState.PERMISSION_REQUIRED) {
+                        OutlinedButton(onClick = onAuthorizeShizuku, modifier = Modifier.focusHighlight()) { Text("Authorize Shizuku") }
+                    }
+                    if (shizuku != ShizukuState.NOT_INSTALLED && shizuku != ShizukuState.UNSUPPORTED) {
+                        OutlinedButton(onClick = onOpenShizuku, modifier = Modifier.focusHighlight()) { Text("Open Shizuku") }
+                    }
+                    OutlinedButton(onClick = onShizukuHelp, modifier = Modifier.focusHighlight()) { Text("Shizuku setup help") }
+                } else {
+                    Text(if (installAllowed) "Install permission: allowed" else "Install permission: needs setup",
+                        style = MaterialTheme.typography.titleSmall)
+                    OutlinedButton(onClick = onInstallPermission, modifier = Modifier.focusHighlight()) { Text("Install permission settings") }
+                }
                 HorizontalDivider()
                 PreferenceSwitch("Install updates automatically", current.autoInstallUpdates,
                     enabled = current.checkIntervalHours > 0, onChange = onAutomaticInstall)
                 Text(
                     if (current.checkIntervalHours == 0) "Choose a background check interval to enable automatic installation."
+                    else if (current.installMethod == InstallMethod.SHIZUKU)
+                        "At each background check, download newer builds and install them while Shizuku is ready. " +
+                            "Otherwise the download waits. Silora must be installed once first."
                     else "At each background check, download newer builds and install them when Android allows it. " +
                         "If confirmation is needed, the download waits for you. Silora must be installed once first.",
                     style = MaterialTheme.typography.bodySmall,

@@ -11,9 +11,12 @@ A dedicated installer and updater for **Silora**, based on App Downloader by edr
 - Update checks use the release's `build-info.json` Android version code, including the phone/TV
   multiplier. The APK's package and version must match before installation. The same or an older
   version is never installed over a newer copy.
-- Uses Android's standard installer and normal install-permission/confirmation requirements.
-  Updates preserve Silora's data when the installed copy uses the same signing key. An incompatible
-  signature must be resolved separately; the updater does not uninstall Silora or erase its data.
+- Choose the Standard Android installer or Shizuku under Settings → App installation method.
+  Shizuku enables unattended updates on older Android / Android TV devices when it is running
+  and Silora Updater is authorized. The standard method keeps Android's usual install permission
+  and confirmation requirements. Updates preserve Silora's
+  data when the installed copy uses the same signing key. An incompatible signature must be
+  resolved separately; the updater does not uninstall Silora or erase its data.
 
 The updater installs separately as `org.silora.updater`, named **Silora Updater**.
 It checks Silora when opened, with the inherited short check cooldown, and every 12 hours in the
@@ -21,8 +24,8 @@ background by default. **Settings** offers checks every 3, 6, 12, or 24 hours, o
 opened/manually. **Install updates automatically** is a separate, persistent switch (off by
 default); when on, each background check downloads newer builds and attempts installation.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
-Android's power/network restrictions can delay background work. If Android requires confirmation,
-the download stays ready and the app offers **Install update** when opened, even while offline.
+Android's power/network restrictions can delay background work. If Android requires confirmation
+or the selected Shizuku connection is unavailable, the download stays ready and the app offers **Install update** when opened, even while offline.
 
 Android 13+ users get an explanation and notification permission request. If notifications are
 denied or disabled, the home screen and Settings show an **Enable notifications** action.
@@ -44,6 +47,29 @@ with a matching light theme. **Settings → Appearance** keeps the existing Foll
 Light, and Dark choices; wallpaper colors do not override the Silora palette. The home screen
 shows release status, installed/latest versions, and update preferences, with side-by-side
 panels on wide screens. Launcher icons, the TV banner, and notifications use the Silora mark.
+
+## Shizuku installation
+
+1. Install [Shizuku](https://shizuku.rikka.app/download/) on the device and follow its
+   [startup guide](https://shizuku.rikka.app/guide/setup/) to start the service.
+2. Open **Settings → App installation method → Shizuku** in Silora Updater.
+3. Select **Authorize Shizuku** and approve access. The status should change to **Ready**.
+4. Install or update Silora normally. Enable **Install updates automatically** to use Shizuku
+   during background checks as well; the first Silora installation remains a manual action.
+
+The installer choice is saved immediately. Unknown-apps permission applies to the Standard
+Android installer; Shizuku uses its own authorization. Missing, stopped, outdated, and denied
+Shizuku states have setup actions. Background work never requests permission or switches to
+another installation method. Downloads remain ready when Shizuku is unavailable or an install
+needs retrying. The home screen also shows the selected method and Shizuku status.
+
+Shizuku normally needs starting again after each reboot on non-rooted devices. Android TV may
+require startup through ADB from another device instead of on-device wireless pairing. Shizuku
+requires Android 6+; the Standard Android installer remains available on Android 5.1. The optional
+provider is disabled on API 22 and all Shizuku calls are guarded. Installation uses a short-lived
+Shizuku UserService, passes APK file descriptors, and streams them into Android package-manager
+sessions. It uses the caller's Android user/profile and retains Android's signature/version checks.
+Both installation methods share update history, notifications, and download cleanup.
 
 ## Build this fork
 

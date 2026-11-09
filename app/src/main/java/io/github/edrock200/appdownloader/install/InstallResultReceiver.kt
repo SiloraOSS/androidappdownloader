@@ -12,7 +12,8 @@ class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val controller = context.app().controller
         val entryId = intent.getStringExtra(ApkInstaller.EXTRA_ENTRY_ID) ?: return
-        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        val status = if (intent.getBooleanExtra(ApkInstaller.EXTRA_SHIZUKU, false)) resultCode
+            else intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val background = intent.getBooleanExtra(ApkInstaller.EXTRA_BACKGROUND, false)
 
         when (status) {
@@ -50,6 +51,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 entryId,
                 status,
                 intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),
+                keepDownload = intent.getBooleanExtra(ApkInstaller.EXTRA_KEEP_DOWNLOAD, false),
             )
         }
     }

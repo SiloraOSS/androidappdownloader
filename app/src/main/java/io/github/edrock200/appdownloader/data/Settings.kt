@@ -13,6 +13,8 @@ data class SettingsState(
     val checkIntervalHours: Int = 12,
     /** Download and attempt to install newer Silora builds at each background check. */
     val autoInstallUpdates: Boolean = false,
+    /** Device-specific: Shizuku authorization is never restored from a backup. */
+    val installMethod: InstallMethod = InstallMethod.STANDARD,
     val deleteApkAfterInstall: Boolean = true,
     /** Check this app's own GitHub releases when it is opened. */
     val checkSelfUpdates: Boolean = true,
@@ -93,6 +95,7 @@ class Settings(context: Context) {
             .putString(KEY_TOKEN, newState.githubToken.trim())
             .putInt(KEY_INTERVAL, newState.checkIntervalHours)
             .putBoolean(KEY_AUTO_INSTALL, newState.autoInstallUpdates)
+            .putString(KEY_INSTALL_METHOD, newState.installMethod.name)
             .putBoolean(KEY_DELETE, newState.deleteApkAfterInstall)
             .putBoolean(KEY_SELF_UPDATE, newState.checkSelfUpdates)
             .putLong(KEY_SCHEDULE_AT, newState.scheduleAt)
@@ -106,6 +109,8 @@ class Settings(context: Context) {
         githubToken = prefs.getString(KEY_TOKEN, "") ?: "",
         checkIntervalHours = prefs.getInt(KEY_INTERVAL, 12),
         autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, false),
+        installMethod = runCatching { InstallMethod.valueOf(prefs.getString(KEY_INSTALL_METHOD, null)!!) }
+            .getOrDefault(InstallMethod.STANDARD),
         deleteApkAfterInstall = prefs.getBoolean(KEY_DELETE, true),
         checkSelfUpdates = prefs.getBoolean(KEY_SELF_UPDATE, true),
         scheduleAt = prefs.getLong(KEY_SCHEDULE_AT, 0),
@@ -121,6 +126,7 @@ class Settings(context: Context) {
         private const val KEY_TOKEN = "github_token"
         private const val KEY_INTERVAL = "check_interval_hours"
         private const val KEY_AUTO_INSTALL = "auto_install_updates"
+        private const val KEY_INSTALL_METHOD = "install_method"
         private const val KEY_INSTALL_PERMISSION_REQUEST = "install_permission_request"
         private const val KEY_DELETE = "delete_after_install"
         private const val KEY_SELF_UPDATE = "check_self_updates"

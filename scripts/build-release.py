@@ -19,6 +19,7 @@ def build():
     parser.add_argument("--signing-dir", type=Path, default=ROOT.parent / "silora-signing",
                         help="directory containing Silora's release.jks and signing.json (default: ../silora-signing)")
     parser.add_argument("--version", help="updater version, e.g. 1.0.1 (default: APP_VERSION_NAME or Gradle's local version)")
+    parser.add_argument("--device-check", action="store_true", help="also build the signed, opt-in Shizuku device-check APK")
     args = parser.parse_args()
     signing_dir = args.signing_dir.expanduser().resolve()
     keystore = signing_dir / "release.jks"
@@ -79,6 +80,8 @@ def build():
     expected = hashlib.sha256(certificate).hexdigest()
     print("Building release APK with the existing Silora signing key…", flush=True)
     tasks = ["testReleaseUnitTest", "lintRelease", "assembleRelease"]
+    if args.device_check:
+        tasks.append("assembleReleaseAndroidTest")
     run([ROOT / "gradlew", "--no-daemon", *tasks])
     apk = ROOT / "app/build/outputs/apk/release/app-release.apk"
     verified = run([apksigner, "verify", "--print-certs", apk], capture_output=True, text=True).stdout
@@ -94,6 +97,12 @@ def build():
     dist.mkdir(exist_ok=True)
     output = dist / "SiloraUpdater.apk"
     shutil.copy2(apk, output)
+    if args.device_check:
+        test_apk = ROOT / "app/build/outputs/apk/androidTest/release/app-release-androidTest.apk"
+        test_certs = run([apksigner, "verify", "--print-certs", test_apk], capture_output=True, text=True).stdout
+        if re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)", test_certs) != [expected]:
+            raise ValueError("Device-check APK must use the same signing certificate as the updater")
+        shutil.copy2(test_apk, dist / "SiloraUpdater-device-check.apk")
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     (dist / "SHA256SUMS").write_text(f"{digest}  {output.name}\n")
     print(f"\nSigned release APK: {output}\nSHA-256: {digest}")

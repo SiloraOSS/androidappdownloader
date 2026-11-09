@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.work.Notifications
 
@@ -51,8 +52,11 @@ fun SiloraScreen(vm: MainViewModel) {
     var allowed by remember { mutableStateOf(SystemActions.canInstallPackages(context)) }
     val isTv = rememberIsTv()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val shizuku by vm.shizukuStatus.collectAsStateWithLifecycle()
+    val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
+    var showShizukuHelp by rememberSaveable { mutableStateOf(false) }
     var showWaiting by rememberSaveable { mutableStateOf(false) }
     var installAfterPermission by rememberSaveable { mutableStateOf(pendingInstallAfterPermission ?: true) }
     var showNotificationIntro by rememberSaveable { mutableStateOf(false) }
@@ -86,6 +90,7 @@ fun SiloraScreen(vm: MainViewModel) {
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.refreshShizuku()
         allowed = SystemActions.canInstallPackages(context)
         val enabled = Notifications.areEnabled(context)
         if (enabled && !notificationsEnabled) vm.notificationPermissionGranted()
@@ -96,7 +101,11 @@ fun SiloraScreen(vm: MainViewModel) {
     }
 
     fun install() {
-        if (SystemActions.canInstallPackages(context)) vm.install(Silora.ID)
+        if (usingShizuku) {
+            val state = vm.refreshShizuku()
+            if (state.ready) vm.install(Silora.ID)
+            else { showSettings = true; vm.message(state.help) }
+        } else if (SystemActions.canInstallPackages(context)) vm.install(Silora.ID)
         else {
             installAfterPermission = true
             permissionPrompt = true
@@ -121,7 +130,7 @@ fun SiloraScreen(vm: MainViewModel) {
     ) { padding ->
         SiloraDashboard(
             item = item, checking = checking, updatingAutomatically = updatingAutomatically,
-            settings = settings, installAllowed = allowed,
+            settings = settings, shizuku = shizuku, installAllowed = allowed,
             notificationsEnabled = notificationsEnabled,
             canOpen = item?.installed != null && SystemActions.canLaunch(context, Silora.PACKAGE),
             isTv = isTv,
@@ -142,7 +151,7 @@ fun SiloraScreen(vm: MainViewModel) {
             text = { Text("Enable installs for Silora Updater, then return here and choose Continue.\n\n" + Device.installPermissionHelp(context)) },
             confirmButton = {
                 TextButton(modifier = Modifier.focusHighlight(), onClick = {
-                    if (SystemActions.canInstallPackages(context)) {
+                    if (usingShizuku || SystemActions.canInstallPackages(context)) {
                         dismissInstallPermission()
                         if (installAfterPermission) install()
                     } else openInstallSettings()
@@ -156,10 +165,16 @@ fun SiloraScreen(vm: MainViewModel) {
     if (showSettings) {
         SiloraSettingsDialog(
             current = settings, installAllowed = allowed, notificationsEnabled = notificationsEnabled,
+            shizuku = shizuku, onInstallMethod = vm::setInstallMethod,
+            onAuthorizeShizuku = vm::authorizeShizuku,
+            onOpenShizuku = {
+                if (!SystemActions.openShizuku(context)) { showSettings = false; showShizukuHelp = true }
+            },
+            onShizukuHelp = { showSettings = false; showShizukuHelp = true },
             onInterval = vm::setCheckInterval,
             onAutomaticInstall = { enabled ->
                 vm.setAutomaticInstallation(enabled)
-                if (enabled && !allowed) {
+                if (enabled && !usingShizuku && !allowed) {
                     showSettings = false
                     installAfterPermission = false
                     permissionPrompt = true
@@ -180,9 +195,26 @@ fun SiloraScreen(vm: MainViewModel) {
     if (showHistory) item?.entry?.let { HistoryDialog(it, onDismiss = { showHistory = false }) }
     if (showWaiting && item?.waiting == true) {
         AlertDialog(onDismissRequest = { showWaiting = false }, title = { Text("Silora update ready") },
-            text = { Text("A background update was downloaded and needs your confirmation to install.") },
+            text = { Text(if (usingShizuku) "A background update is downloaded. ${shizuku.help} Choose Install update when ready."
+                else "A background update was downloaded and needs your confirmation to install.") },
             confirmButton = { TextButton(onClick = { showWaiting = false; install() }, modifier = Modifier.focusHighlight()) { Text("Install update") } },
             dismissButton = { TextButton(onClick = { showWaiting = false }, modifier = Modifier.focusHighlight()) { Text("Later") } },
+        )
+    }
+    if (showShizukuHelp) {
+        AlertDialog(onDismissRequest = { showShizukuHelp = false }, title = { Text("Set up Shizuku") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("1. Install Shizuku from shizuku.rikka.app/download.\n\n" +
+                    "2. Open Shizuku and follow its instructions to start it with wireless debugging or ADB. TV devices may need ADB from another device.\n\n" +
+                    "3. Return here, choose Shizuku in Settings and select Authorize Shizuku.\n\n" +
+                    "Shizuku normally needs starting again after a reboot on non-rooted devices.")
+                Text("Full guide: https://shizuku.rikka.app/guide/setup/", style = MaterialTheme.typography.bodySmall)
+                QrCode("https://shizuku.rikka.app/guide/setup/", Modifier.widthIn(max = 160.dp).fillMaxWidth().align(Alignment.CenterHorizontally))
+            } },
+            confirmButton = { TextButton(onClick = { showShizukuHelp = false; showSettings = true }, modifier = Modifier.focusHighlight()) { Text("Back to settings") } },
+            dismissButton = { TextButton(onClick = {
+                if (!SystemActions.openUrl(context, "https://shizuku.rikka.app/guide/setup/")) vm.message("Open shizuku.rikka.app/guide/setup on your phone or computer.")
+            }, modifier = Modifier.focusHighlight()) { Text("Open guide") } },
         )
     }
     if (showNotificationIntro && !showWaiting && !permissionPrompt) {

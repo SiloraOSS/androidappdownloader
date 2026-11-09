@@ -73,6 +73,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Whether the "updates are waiting" prompt was already shown since the app was opened. */
     var waitingPromptShown = false
     val settings = app.settings.state
+    val shizukuStatus = app.shizuku.state
+    fun refreshShizuku() = app.shizuku.refresh()
+    fun authorizeShizuku() { app.shizuku.requestPermission()?.let(::message) }
     val messages = app.controller.messages
 
     /** A backup that was read and is waiting for the user to confirm the restore. */
@@ -295,6 +298,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCheckInterval(hours: Int) = saveSettings(app.settings.current.copy(checkIntervalHours = hours))
     fun setAutomaticInstallation(enabled: Boolean) = saveSettings(app.settings.current.copy(autoInstallUpdates = enabled))
+    fun setInstallMethod(method: io.github.edrock200.appdownloader.data.InstallMethod) {
+        saveSettings(app.settings.current.copy(installMethod = method))
+        app.shizuku.refresh()
+    }
     fun setTheme(mode: io.github.edrock200.appdownloader.data.ThemeMode) = saveSettings(app.settings.current.copy(themeMode = mode))
     fun setDeleteAfterInstall(enabled: Boolean) = saveSettings(app.settings.current.copy(deleteApkAfterInstall = enabled))
     val notificationPermissionAsked get() = app.settings.notificationPermissionAsked

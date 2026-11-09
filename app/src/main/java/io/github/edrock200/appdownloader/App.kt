@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import io.github.edrock200.appdownloader.data.EntryRepository
 import io.github.edrock200.appdownloader.data.Settings
+import io.github.edrock200.appdownloader.install.ShizukuManager
 import io.github.edrock200.appdownloader.work.Notifications
 import io.github.edrock200.appdownloader.work.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -19,11 +20,14 @@ class App : Application() {
         private set
     lateinit var controller: AppController
         private set
+    lateinit var shizuku: ShizukuManager
+        private set
 
     override fun onCreate() {
         super.onCreate()
         repository = EntryRepository(this)
         settings = Settings(this)
+        shizuku = ShizukuManager(this)
         controller = AppController(this, repository, settings, scope)
         Notifications.createChannel(this)
         UpdateScheduler.schedule(this, settings.current.checkIntervalHours)
