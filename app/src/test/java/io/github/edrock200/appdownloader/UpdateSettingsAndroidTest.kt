@@ -32,6 +32,22 @@ class UpdateSettingsAndroidTest {
         assertFalse(reopened.deleteApkAfterInstall)
     }
 
+    @Test fun customDailyHourSurvivesRestartAndReturningToIntervalMode() {
+        val settings = Settings(context)
+        settings.update(settings.current.copy(checkIntervalHours = 24, checkDaily = true,
+            checkHour = 21, autoInstallUpdates = true))
+        val reopened = Settings(context).current
+        assertTrue(reopened.hasDailyCheck)
+        assertEquals(21, reopened.checkHour)
+        assertTrue(reopened.autoInstallUpdates)
+        settings.update(reopened.copy(checkDaily = false, checkIntervalHours = 6))
+        assertFalse(Settings(context).current.hasDailyCheck)
+        assertEquals(21, Settings(context).current.checkHour)
+        settings.update(reopened.copy(checkIntervalHours = 0))
+        assertFalse(Settings(context).current.hasDailyCheck)
+        assertFalse(Settings(context).current.autoInstallUpdates)
+    }
+
     @Test fun disablingChecksPersistsWithAutomaticInstallationOff() {
         val settings = Settings(context)
         settings.update(settings.current.copy(autoInstallUpdates = true))

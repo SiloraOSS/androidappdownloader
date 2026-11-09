@@ -183,7 +183,7 @@ fun SiloraScreen(vm: MainViewModel) {
                 if (!SystemActions.openShizuku(context)) { showSettings = false; showShizukuHelp = true }
             },
             onShizukuHelp = { showSettings = false; showShizukuHelp = true },
-            onInterval = vm::setCheckInterval,
+            onInterval = vm::setCheckInterval, onDailyCheck = vm::setDailyCheck,
             onAutomaticInstall = { enabled ->
                 vm.setAutomaticInstallation(enabled)
                 if (enabled && !usingShizuku && !allowed) {

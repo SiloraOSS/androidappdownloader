@@ -7,6 +7,8 @@ object UpdatePreferences {
         return state.copy(
             githubToken = state.githubToken.trim(),
             checkIntervalHours = interval,
+            checkDaily = interval > 0 && state.checkDaily,
+            checkHour = state.checkHour.takeIf { it in 0..23 } ?: 3,
             autoInstallUpdates = interval > 0 && state.autoInstallUpdates,
         )
     }

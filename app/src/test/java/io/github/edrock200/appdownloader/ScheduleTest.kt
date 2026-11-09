@@ -18,6 +18,32 @@ class ScheduleTest {
     private fun t(s: String) = SimpleDateFormat("yyyy-MM-dd HH:mm").apply { timeZone = ny }.parse(s)!!.time
     private fun f(ms: Long) = SimpleDateFormat("yyyy-MM-dd HH:mm").apply { timeZone = ny }.format(ms)
 
+    @Test fun dailyHourTargetsTodayOrTomorrowWithoutDriftingAfterALateCheck() {
+        assertEquals(t("2026-11-05 21:00"), Schedule.nextDailyCheck(21, t("2026-11-05 12:15"), ny))
+        assertEquals(t("2026-11-06 03:00"), Schedule.nextDailyCheck(3, t("2026-11-05 03:00"), ny))
+        assertEquals(t("2026-11-06 03:00"), Schedule.nextDailyCheck(3, t("2026-11-05 07:45"), ny))
+        assertEquals(t("2026-11-06 00:00"), Schedule.nextDailyCheck(0, t("2026-11-05 23:59"), ny))
+    }
+
+    @Test fun dailyHourKeepsLocalTimeAcrossDaylightSavingChanges() {
+        val fall = Schedule.nextDailyCheck(3, t("2026-10-31 04:00"), ny)
+        assertEquals(t("2026-11-01 03:00"), fall)
+        assertEquals(25 * 3_600_000L, fall - t("2026-10-31 03:00"))
+        val spring = Schedule.nextDailyCheck(3, t("2026-03-07 04:00"), ny)
+        assertEquals(t("2026-03-08 03:00"), spring)
+        assertEquals(23 * 3_600_000L, spring - t("2026-03-07 03:00"))
+        // The skipped 2 AM hour runs at 3 AM once, then returns to 2 AM the next day.
+        assertEquals(t("2026-03-08 03:00"), Schedule.nextDailyCheck(2, t("2026-03-07 04:00"), ny))
+        assertEquals(t("2026-03-09 02:00"), Schedule.nextDailyCheck(2, t("2026-03-08 04:00"), ny))
+    }
+
+    @Test fun dailyHourUsesTheProvidedTimeZone() {
+        val utc = TimeZone.getTimeZone("UTC")
+        val now = t("2026-11-05 12:15")
+        val next = Schedule.nextDailyCheck(21, now, utc)
+        assertEquals(t("2026-11-05 16:00"), next)
+    }
+
     @Test
     fun futureTimeIsKept() {
         assertEquals(t("2026-11-06 03:00"), Schedule.nextRun(t("2026-11-06 03:00"), Repeat.ONCE, t("2026-11-05 12:00"), ny))

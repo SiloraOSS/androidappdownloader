@@ -30,7 +30,7 @@ class App : Application() {
         shizuku = ShizukuManager(this)
         controller = AppController(this, repository, settings, scope)
         Notifications.createChannel(this)
-        UpdateScheduler.schedule(this, settings.current.checkIntervalHours)
+        UpdateScheduler.schedule(this, settings.current, keepExisting = true)
     }
 }
 

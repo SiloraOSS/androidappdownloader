@@ -34,6 +34,24 @@ class UpdatePreferencesTest {
         assertEquals(12, UpdatePreferences.normalize(SettingsState(checkIntervalHours = 1)).checkIntervalHours)
     }
 
+    @Test fun customChecksAllowAutomaticInstallationAndValidateTheHour() {
+        for (hour in 0..23) {
+            val saved = UpdatePreferences.normalize(SettingsState(checkIntervalHours = 24,
+                checkDaily = true, checkHour = hour, autoInstallUpdates = true))
+            assertTrue(saved.hasDailyCheck)
+            assertEquals(hour, saved.checkHour)
+            assertTrue(UpdatePreferences.shouldInstall(saved))
+        }
+        for (hour in listOf(-1, 24)) {
+            assertEquals(3, UpdatePreferences.normalize(SettingsState(checkHour = hour)).checkHour)
+        }
+        val manual = UpdatePreferences.normalize(SettingsState(checkIntervalHours = 0,
+            checkDaily = true, checkHour = 21, autoInstallUpdates = true))
+        assertFalse(manual.checkDaily)
+        assertFalse(manual.autoInstallUpdates)
+        assertEquals(21, manual.checkHour)
+    }
+
     private fun update() = Silora.entries(emptyList(), false).single().copy(
         latestTag = "new-build", latestAssetUrl = "https://example.com/silora-phone.apk",
     )

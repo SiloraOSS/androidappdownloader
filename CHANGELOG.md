@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Custom daily update checks: choose Custom in Settings, then pick an hour of the day
+  with the remote-friendly time controls. The saved schedule follows the device's local
+  time and appears on the home screen. Android may delay checks while asleep or offline.
+
 ## [1.0.2] - 2026-11-08
 
 First Silora Updater release, distributed for Android TV / Google TV. Phone and tablet use

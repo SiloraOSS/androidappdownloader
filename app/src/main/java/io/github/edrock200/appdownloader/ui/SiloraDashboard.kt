@@ -307,7 +307,8 @@ private fun SiloraPreferencesCard(
             Text("Make it effortless.", style = MaterialTheme.typography.titleLarge)
             if (!compact) Text("Your update preferences, at a glance.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             PreferenceSummary(Icons.Default.Refresh, "Background checks",
-                if (settings.checkIntervalHours == 0) "Off · check when opened" else "Every ${settings.checkIntervalHours} hours")
+                if (settings.hasDailyCheck) "Daily at ${formatCheckHour(androidx.compose.ui.platform.LocalContext.current, settings.checkHour)}"
+                else if (settings.checkIntervalHours == 0) "Off · check when opened" else "Every ${settings.checkIntervalHours} hours")
             HorizontalDivider(color = colors.outlineVariant)
             PreferenceSummary(Icons.Default.CheckCircle, "Automatic installation", if (settings.autoInstallUpdates) "On" else "Off")
             HorizontalDivider(color = colors.outlineVariant)

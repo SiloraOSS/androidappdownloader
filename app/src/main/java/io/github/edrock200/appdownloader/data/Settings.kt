@@ -11,6 +11,9 @@ data class SettingsState(
     val githubToken: String = "",
     /** 0 disables background update checks. */
     val checkIntervalHours: Int = 12,
+    /** Custom checks run once a day at checkHour in the device's local time. */
+    val checkDaily: Boolean = false,
+    val checkHour: Int = 3,
     /** Download and attempt to install newer Silora builds at each background check. */
     val autoInstallUpdates: Boolean = false,
     /** Device-specific: Shizuku authorization is never restored from a backup. */
@@ -25,6 +28,7 @@ data class SettingsState(
     val updateOnlyIfChanged: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
+    val hasDailyCheck get() = checkIntervalHours > 0 && checkDaily
     val hasSchedule get() = scheduleAt > 0
 }
 
@@ -94,6 +98,8 @@ class Settings(context: Context) {
         prefs.edit()
             .putString(KEY_TOKEN, newState.githubToken.trim())
             .putInt(KEY_INTERVAL, newState.checkIntervalHours)
+            .putBoolean(KEY_CHECK_DAILY, newState.checkDaily)
+            .putInt(KEY_CHECK_HOUR, newState.checkHour)
             .putBoolean(KEY_AUTO_INSTALL, newState.autoInstallUpdates)
             .putString(KEY_INSTALL_METHOD, newState.installMethod.name)
             .putBoolean(KEY_DELETE, newState.deleteApkAfterInstall)
@@ -108,6 +114,8 @@ class Settings(context: Context) {
     private fun read() = SettingsState(
         githubToken = prefs.getString(KEY_TOKEN, "") ?: "",
         checkIntervalHours = prefs.getInt(KEY_INTERVAL, 12),
+        checkDaily = prefs.getBoolean(KEY_CHECK_DAILY, false),
+        checkHour = prefs.getInt(KEY_CHECK_HOUR, 3),
         autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, false),
         installMethod = runCatching { InstallMethod.valueOf(prefs.getString(KEY_INSTALL_METHOD, null)!!) }
             .getOrDefault(InstallMethod.STANDARD),
@@ -124,6 +132,8 @@ class Settings(context: Context) {
     companion object {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_TOKEN = "github_token"
+        private const val KEY_CHECK_DAILY = "check_daily"
+        private const val KEY_CHECK_HOUR = "check_hour"
         private const val KEY_INTERVAL = "check_interval_hours"
         private const val KEY_AUTO_INSTALL = "auto_install_updates"
         private const val KEY_INSTALL_METHOD = "install_method"

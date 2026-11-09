@@ -23,6 +23,14 @@ class BackupTest {
         AppEntry(name = "NewPipe", type = SourceType.GITHUB, source = "TeamNewPipe/NewPipe", assetFilter = "universal",
             includePrereleases = true, latestTag = "v1.0", installedTag = "v0.9"),
     )
+    @Test fun customDailyChecksRoundTripThroughBackup() {
+        val original = SettingsState(checkIntervalHours = 24, checkDaily = true, checkHour = 23)
+        val file = Backup.create(emptyList(), original, false, "test", now)
+        val restored = Backup.restoreSettings(SettingsState(), Backup.parse(Backup.toJson(file)).settings, now)
+        assertTrue(restored.hasDailyCheck)
+        assertEquals(23, restored.checkHour)
+    }
+
     private val settings = SettingsState(githubToken = "ghp_secret", checkIntervalHours = 6, scheduleAt = now + 3_600_000, scheduleRepeat = Repeat.EVERY_4H)
 
     @Test

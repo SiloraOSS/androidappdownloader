@@ -6,21 +6,32 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import io.github.edrock200.appdownloader.data.Schedule
+import io.github.edrock200.appdownloader.data.SettingsState
 import java.util.concurrent.TimeUnit
 
 object UpdateScheduler {
     private const val WORK_NAME = "github-update-check"
 
-    fun schedule(context: Context, intervalHours: Int) {
+    fun schedule(context: Context, state: SettingsState, keepExisting: Boolean = false): androidx.work.Operation {
         val wm = WorkManager.getInstance(context)
-        if (intervalHours <= 0) {
-            wm.cancelUniqueWork(WORK_NAME)
-            return
+        if (state.checkIntervalHours <= 0) {
+            return wm.cancelUniqueWork(WORK_NAME)
         }
-        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(intervalHours.toLong(), TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(
+            if (state.hasDailyCheck) 24L else state.checkIntervalHours.toLong(), TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setInitialDelay(15, TimeUnit.MINUTES)
+            .apply {
+                if (state.hasDailyCheck) {
+                    setNextScheduleTimeOverride(Schedule.nextDailyCheck(state.checkHour, System.currentTimeMillis()))
+                } else {
+                    setInitialDelay(15, TimeUnit.MINUTES)
+                    clearNextScheduleTimeOverride()
+                }
+            }
             .build()
-        wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+        // Startup must preserve an overdue check (including after a reboot).
+        val policy = if (keepExisting) ExistingPeriodicWorkPolicy.KEEP else ExistingPeriodicWorkPolicy.UPDATE
+        return wm.enqueueUniquePeriodicWork(WORK_NAME, policy, request)
     }
 }

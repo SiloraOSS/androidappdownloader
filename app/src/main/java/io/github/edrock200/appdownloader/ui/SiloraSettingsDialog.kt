@@ -25,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.R
@@ -33,6 +36,8 @@ import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.ThemeMode
 import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.install.ShizukuState
+import android.content.Context
+import java.util.Date
 
 @Composable
 fun SiloraSettingsDialog(
@@ -45,6 +50,7 @@ fun SiloraSettingsDialog(
     onOpenShizuku: () -> Unit,
     onShizukuHelp: () -> Unit,
     onInterval: (Int) -> Unit,
+    onDailyCheck: (Int) -> Unit,
     onAutomaticInstall: (Boolean) -> Unit,
     onDeleteAfterInstall: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
@@ -68,7 +74,27 @@ fun SiloraSettingsDialog(
                     style = MaterialTheme.typography.bodySmall)
                 Settings.INTERVAL_OPTIONS.forEach { hours ->
                     PreferenceChoice(if (hours == 0) "When opened / manual only" else "Every $hours hours",
-                        current.checkIntervalHours == hours) { onInterval(hours) }
+                        !current.hasDailyCheck && current.checkIntervalHours == hours) { onInterval(hours) }
+                }
+                PreferenceChoice("Custom", current.hasDailyCheck) { onDailyCheck(current.checkHour) }
+                if (current.hasDailyCheck) {
+                    Text("Daily check time", style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = { onDailyCheck((current.checkHour + 23) % 24) },
+                            modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour earlier" }) {
+                            Text("−")
+                        }
+                        Text(formatCheckHour(LocalContext.current, current.checkHour),
+                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        OutlinedButton(onClick = { onDailyCheck((current.checkHour + 1) % 24) },
+                            modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour later" }) {
+                            Text("+")
+                        }
+                    }
+                    Text("Checks once a day at this time in your device's local time zone. " +
+                        "If the device is asleep or offline, the check may happen later.",
+                        style = MaterialTheme.typography.bodySmall)
                 }
                 HorizontalDivider()
                 SettingsSection("App installation method")
@@ -95,7 +121,7 @@ fun SiloraSettingsDialog(
                 PreferenceSwitch("Install updates automatically", current.autoInstallUpdates,
                     enabled = current.checkIntervalHours > 0, onChange = onAutomaticInstall)
                 Text(
-                    if (current.checkIntervalHours == 0) "Choose a background check interval to enable automatic installation."
+                    if (current.checkIntervalHours == 0) "Choose a background check schedule to enable automatic installation."
                     else if (current.installMethod == InstallMethod.SHIZUKU)
                         "At each background check, download newer builds and install them while Shizuku is ready. " +
                             "Otherwise the download waits. Silora must be installed once first."
@@ -128,6 +154,12 @@ fun SiloraSettingsDialog(
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Done") } },
     )
 }
+
+/** Uses the same device 12/24-hour preference in Settings and the dashboard. */
+internal fun formatCheckHour(context: Context, hour: Int): String =
+    android.text.format.DateFormat.getTimeFormat(context).apply {
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+    }.format(Date(hour * 3_600_000L))
 
 @Composable
 private fun PreferenceChoice(label: String, selected: Boolean, enabled: Boolean = true, onSelect: () -> Unit) {

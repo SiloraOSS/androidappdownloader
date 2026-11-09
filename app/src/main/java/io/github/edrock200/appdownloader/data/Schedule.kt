@@ -55,6 +55,15 @@ object Schedule {
         return n
     }
 
+    /** Next daily check, recalculated from the requested hour so late runs and DST cannot drift it. */
+    fun nextDailyCheck(hour: Int, now: Long, zone: TimeZone = TimeZone.getDefault()): Long {
+        require(hour in 0..23)
+        val today = atTime(now, hour, 0, zone)
+        if (today > now) return today
+        // Set the hour again after moving the date: a missing DST hour must not shift later days.
+        return atTime(addDays(now, 1, zone), hour, 0, zone)
+    }
+
     /** Default suggestion: the next 3:00 AM. */
     fun defaultTime(now: Long, zone: TimeZone = TimeZone.getDefault()): Long {
         val today = atTime(now, 3, 0, zone)

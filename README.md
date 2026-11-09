@@ -58,9 +58,12 @@ fingerprint to reject replaced files, even when their package and version still 
 
 The updater installs separately as `org.silora.updater`, named **Silora Updater**.
 It checks Silora when opened, with the inherited short check cooldown, and every 12 hours in the
-background by default. **Settings** offers checks every 3, 6, 12, or 24 hours, or only when
-opened/manually. **Install updates automatically** is a separate, persistent switch (off by
-default); when on, each background check downloads newer builds and attempts installation.
+background by default. **Settings** offers checks every 3, 6, 12, or 24 hours, only when
+opened/manually, or **Custom** for a daily check at a chosen hour. Selecting Custom reveals
+**Daily check time** with −/+ hour controls that work with a TV remote. Times use the device's
+local time zone and 12/24-hour display preference; the home screen shows the saved daily time.
+Late checks do not shift the following day's chosen hour.
+**Install updates automatically** is a separate, persistent switch (off by default); when on, each background check downloads newer builds and attempts installation.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
 Android's power/network restrictions can delay background work. If Android requires confirmation
 or the selected Shizuku connection is unavailable, the download stays ready and the app offers **Install update** when opened, even while offline.

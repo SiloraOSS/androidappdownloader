@@ -296,15 +296,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val old = app.settings.current
         app.settings.update(state)
         val saved = app.settings.current
-        if (old.checkIntervalHours != saved.checkIntervalHours) {
-            UpdateScheduler.schedule(app, saved.checkIntervalHours)
+        if (old.checkIntervalHours != saved.checkIntervalHours || old.checkDaily != saved.checkDaily ||
+            (saved.hasDailyCheck && old.checkHour != saved.checkHour)) {
+            UpdateScheduler.schedule(app, saved)
         }
         if (old.scheduleAt != state.scheduleAt || old.scheduleRepeat != state.scheduleRepeat) {
             AutoUpdateScheduler.apply(app, state)
         }
     }
 
-    fun setCheckInterval(hours: Int) = saveSettings(app.settings.current.copy(checkIntervalHours = hours))
+    fun setCheckInterval(hours: Int) = saveSettings(app.settings.current.copy(checkIntervalHours = hours, checkDaily = false))
+    fun setDailyCheck(hour: Int) = saveSettings(app.settings.current.copy(
+        checkIntervalHours = 24, checkDaily = true, checkHour = hour))
     fun setAutomaticInstallation(enabled: Boolean) = saveSettings(app.settings.current.copy(autoInstallUpdates = enabled))
     fun setInstallMethod(method: io.github.edrock200.appdownloader.data.InstallMethod) {
         saveSettings(app.settings.current.copy(installMethod = method))

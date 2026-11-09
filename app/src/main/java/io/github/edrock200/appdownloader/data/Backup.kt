@@ -26,6 +26,8 @@ data class BackupApp(
 data class BackupSettings(
     val githubToken: String? = null,
     val checkIntervalHours: Int = 12,
+    val checkDaily: Boolean = false,
+    val checkHour: Int = 3,
     val deleteApkAfterInstall: Boolean = true,
     val checkSelfUpdates: Boolean = true,
     val scheduleAt: Long = 0,
@@ -80,6 +82,8 @@ object Backup {
         settings = BackupSettings(
             githubToken = settings.githubToken.takeIf { includeToken && it.isNotBlank() },
             checkIntervalHours = settings.checkIntervalHours,
+            checkDaily = settings.checkDaily,
+            checkHour = settings.checkHour,
             deleteApkAfterInstall = settings.deleteApkAfterInstall,
             checkSelfUpdates = settings.checkSelfUpdates,
             scheduleAt = settings.scheduleAt,
@@ -173,6 +177,8 @@ object Backup {
         return current.copy(
             githubToken = backup.githubToken ?: current.githubToken,
             checkIntervalHours = backup.checkIntervalHours,
+            checkDaily = backup.checkDaily,
+            checkHour = backup.checkHour,
             deleteApkAfterInstall = backup.deleteApkAfterInstall,
             checkSelfUpdates = backup.checkSelfUpdates,
             scheduleAt = next ?: 0,
