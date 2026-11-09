@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, e.g. 1.2.0 (publishes it and announces on Discord). Leave empty for a test build."
+        description: "Version to release, e.g. 1.2.0 (publishes to GitHub). Leave empty for a test build."
         required: false
         type: string
 
@@ -17,7 +17,7 @@ permissions:
 
 env:
   # Stable link that always serves the newest release (keep the asset name fixed).
-  LATEST_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/AppDownloader.apk
+  LATEST_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/SiloraUpdater.apk
 
 jobs:
   build:
@@ -81,23 +81,26 @@ jobs:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease
+        run: ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
 
       - name: Rename APKs
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/AppDownloader-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk dist/AppDownloader.apk
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dist/SiloraUpdater.apk
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/SiloraUpdater-unsigned.apk
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AppDownloader-apks
+          name: SiloraUpdater-apks
           path: dist/*.apk
 
       - name: Write release notes
         if: env.IS_RELEASE == 'true'
         env:
-          AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}
+          AFTV_CODE: ${{ vars.AFTV_CODE }}
         run: |
           .github/scripts/release-notes.sh "$APP_VERSION_NAME" > "$RUNNER_TEMP/notes.md"
           {
@@ -110,7 +113,7 @@ jobs:
               echo "- **TV:** in the Downloader app, enter code **$AFTV_CODE**"
             fi
             echo "- **Direct download (always the latest version):** $LATEST_APK_URL"
-            echo "- Already installed? Open App Downloader and it will offer the update."
+            echo "- Open Silora Updater and choose Install Silora or Update Silora."
           } > "$RUNNER_TEMP/release-body.md"
 
       - name: Publish GitHub release
@@ -120,23 +123,7 @@ jobs:
         with:
           tag_name: v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
-          name: App Downloader ${{ env.APP_VERSION_NAME }}
+          name: Silora Updater ${{ env.APP_VERSION_NAME }}
           body_path: ${{ runner.temp }}/release-body.md
-          files: dist/AppDownloader.apk
+          files: dist/SiloraUpdater.apk
           make_latest: true
-
-      - name: Announce on Discord
-        if: env.IS_RELEASE == 'true'
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          AFTV_CODE: ${{ vars.AFTV_CODE || '9697744' }}
-          VERSION: ${{ env.APP_VERSION_NAME }}
-          RELEASE_URL: ${{ steps.release.outputs.url }}
-          DOWNLOAD_URL: ${{ env.LATEST_APK_URL }}
-          NOTES_FILE: ${{ runner.temp }}/notes.md
-        run: |
-          if [ -z "$DISCORD_WEBHOOK" ]; then
-            echo "DISCORD_WEBHOOK secret not set; skipping announcement."
-            exit 0
-          fi
-          .github/scripts/discord-notify.sh

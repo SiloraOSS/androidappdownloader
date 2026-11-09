@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
             SideEffect {
                 enableEdgeToEdge(
                     statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { dark },
-                    navigationBarStyle = SystemBarStyle.auto(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt()) { dark },
+                    navigationBarStyle = SystemBarStyle.auto(0xE6F8F6FC.toInt(), 0xE60C0B10.toInt()) { dark },
                 )
             }
             AppTheme(dark = dark) {

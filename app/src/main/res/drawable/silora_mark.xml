@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Silora split-prism mark, from silo-android/branding/silora-mark.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp" android:height="64dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <group android:translateX="16">
+        <path android:fillColor="#5736B4" android:pathData="M140,68L119,157L166,185Z" />
+        <path android:fillColor="#B59AF4" android:pathData="M140,68L442,262L166,185Z" />
+        <path android:fillColor="#6856A3" android:pathData="M166,185L442,262L360,310Z" />
+        <path android:fillColor="#6544C6" android:pathData="M111,175L325,319L70,443Z" />
+    </group>
+</vector>

@@ -9,3 +9,5 @@ build/
 .cxx
 *.jks
 *.keystore
+/dist/
+__pycache__/

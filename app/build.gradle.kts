@@ -7,7 +7,7 @@ plugins {
 
 // The release workflow sets APP_VERSION_NAME from the git tag (v1.2.3 -> 1.2.3).
 // versionCode is derived from it, so it always increases: 1.2.3 -> 10203.
-val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.7.0"
+val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.0.2"
 val appVersionCode: Int = appVersionName.split('.').map { it.toInt() }.let { (major, minor, patch) ->
     require(minor < 100 && patch < 100) { "minor and patch must be below 100" }
     major * 10_000 + minor * 100 + patch
@@ -18,18 +18,17 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.edrock200.appdownloader"
+        applicationId = "org.silora.updater"
         minSdk = 22
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
 
         // Repository the app checks for its own updates.
-        buildConfigField("String", "UPDATE_REPO", "\"edrock200/androidappdownloader\"")
+        buildConfigField("String", "UPDATE_REPO", "\"\"")
     }
 
-    // Optional release signing, configured through environment variables so that
-    // CI can sign with a stable key (see README). Falls back to the debug key.
+    // Stable release signing is supplied externally; never distribute a debug-signed release.
     val keystorePath = System.getenv("SIGNING_KEYSTORE_FILE")
     signingConfigs {
         if (!keystorePath.isNullOrBlank()) {
@@ -45,7 +44,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

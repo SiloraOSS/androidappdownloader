@@ -1,4 +1,45 @@
-# App Downloader
+# Silora Updater
+
+A Silora-branded fork of App Downloader, installed separately as **Silora Updater**
+(`org.silora.updater`). The launcher, TV banner, notifications and light/dark palette use
+Silora's purple prism branding. The updater icon has an upward-arrow badge to distinguish
+it from the player. Upstream App Downloader self-updates are disabled for this custom app.
+
+## Build this fork
+
+Run this from the checkout (or invoke the script by its full path):
+
+```sh
+./build.sh
+# Signed, verified APK: dist/SiloraUpdater.apk
+```
+
+The script uses your **existing Silora release key** in `../silora-signing/release.jks` with
+`../silora-signing/signing.json`, using the same `password`, `alias`, and optional `key_password`
+fields as Silora's build script. Signing material stays outside this repository. It runs release
+unit tests and lint, builds the release, and verifies the APK's certificate matches that key,
+its app ID is `org.silora.updater`, and it is not debuggable. It also writes `dist/SHA256SUMS`.
+
+```sh
+./build.sh --version 1.0.2
+./build.sh --signing-dir /path/to/silora-signing
+```
+
+Requires Python 3, a full JDK 17+ (the script prefers the installed JDK 21), and Android SDK
+platform 35, build-tools 35.0.0, and cmdline-tools/latest. `JAVA_HOME` and `ANDROID_HOME` can
+override the detected tools. `APP_VERSION_NAME` can also set the updater version; otherwise
+Gradle's local default is used. Use a higher version for future updater releases.
+
+For CI or direct Gradle builds, supply `SIGNING_KEYSTORE_FILE`, `SIGNING_KEYSTORE_PASSWORD`,
+`SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`. Release builds never fall back to a debug key.
+
+The inherited release workflow now produces `SiloraUpdater.apk`. Publishing it and assigning a
+Downloader code are separate distribution steps. The upstream Downloader code and download links
+in the historical documentation below install the original App Downloader, not this fork.
+
+---
+
+# Upstream App Downloader reference
 
 An Android app (phones, tablets, **Fire TV** and **Android TV**) for saving links to APKs and
 installing them in one tap. It understands three kinds of sources:

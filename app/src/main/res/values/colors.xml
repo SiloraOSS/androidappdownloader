@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#FF101418</color>
-    <color name="brand">#FF1E88E5</color>
-    <color name="brand_dark">#FF0D47A1</color>
+    <color name="background">#FF0C0B10</color>
+    <color name="brand">#FF6544C6</color>
+    <color name="brand_dark">#FF302244</color>
 </resources>

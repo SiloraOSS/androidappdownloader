@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Rebranded as Silora Updater with its own `org.silora.updater` identity, purple prism launcher
+  and notification icons, an updater-arrow badge, TV banner, and violet light/dark themes.
+- Disabled upstream App Downloader self-updates for this custom app.
+- `./build.sh` validates and signs `dist/SiloraUpdater.apk` with the existing external Silora key.
+  The release workflow uses the new APK name and no longer posts Discord announcements.
+
 ## [1.7.0] - 2026-11-06
 
 ### Added

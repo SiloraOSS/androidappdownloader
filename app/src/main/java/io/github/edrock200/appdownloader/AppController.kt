@@ -710,6 +710,8 @@ class AppController(
 
     /** Returns true when the check completed (whether or not an update was found). */
     private suspend fun checkSelfUpdate(manual: Boolean): Boolean {
+        // Custom updater builds must not offer an upstream App Downloader APK.
+        if (BuildConfig.UPDATE_REPO.isBlank()) return true
         val current = BuildConfig.VERSION_NAME
         try {
             val self = AppEntry(

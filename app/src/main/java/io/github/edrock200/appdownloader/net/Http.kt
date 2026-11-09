@@ -12,7 +12,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 object Http {
-    const val USER_AGENT = "AppDownloader/1.0 (Android)"
+    const val USER_AGENT = "SiloraUpdater/1.0 (Android)"
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)

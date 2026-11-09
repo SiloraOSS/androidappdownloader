@@ -2,14 +2,20 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Download arrow -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M48,30h12v22h10l-16,18l-16,-18h10z" />
-    <!-- Tray -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M34,72h40v6h-40z" />
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <!-- Keep the prism inside the adaptive icon's safe area. -->
+    <group android:scaleX="0.66" android:scaleY="0.66" android:translateX="97.6" android:translateY="87">
+        <path android:fillColor="#5736B4" android:pathData="M140,68L119,157L166,185Z" />
+        <path android:fillColor="#B59AF4" android:pathData="M140,68L442,262L166,185Z" />
+        <path android:fillColor="#6856A3" android:pathData="M166,185L442,262L360,310Z" />
+        <path android:fillColor="#6544C6" android:pathData="M111,175L325,319L70,443Z" />
+    </group>
+    <!-- Small upload badge distinguishes the updater while preserving the Silora prism. -->
+    <path android:fillColor="#0C0B10"
+        android:pathData="M325,280a49,49 0,1 0,0 98a49,49 0,1 0,0 -98" />
+    <path android:fillColor="#D8C4FF"
+        android:pathData="M325,286a43,43 0,1 0,0 86a43,43 0,1 0,0 -86" />
+    <path android:fillColor="#30175D"
+        android:pathData="M325,301L347,323L338,332L331,325V341H319V325L312,332L303,323ZM305,345H314V352H336V345H345V361H305Z" />
 </vector>

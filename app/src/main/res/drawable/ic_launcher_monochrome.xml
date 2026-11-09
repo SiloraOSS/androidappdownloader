@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <group android:scaleX="0.66" android:scaleY="0.66" android:translateX="97.6" android:translateY="87">
+        <path android:fillColor="#FFFFFF" android:pathData="M140,68L119,157L166,185Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M140,68L442,262L166,185Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M166,185L442,262L360,310Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M111,175L325,319L70,443Z" />
+    </group>
+    <!-- Themed icons use alpha, so the upload glyph needs its own silhouette. -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M325,301L347,323L338,332L331,325V341H319V325L312,332L303,323ZM305,345H314V352H336V345H345V361H305Z" />
+</vector>

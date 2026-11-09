@@ -62,12 +62,12 @@ object Device {
     /** Where the user finds the "install unknown apps" switch on this kind of device. */
     fun installPermissionHelp(context: Context): String = when {
         isFireTv(context) ->
-            "On Fire TV: Settings › My Fire TV › Developer options › Install unknown apps › App Downloader."
+            "On Fire TV: Settings › My Fire TV › Developer options › Install unknown apps › Silora Updater."
         isTv(context) ->
             "On Android TV / Google TV: Settings › Apps › Security & restrictions › Unknown sources › " +
-                "App Downloader. (Older models: Settings › Device Preferences › Security & restrictions.)"
+                "Silora Updater. (Older models: Settings › Device Preferences › Security & restrictions.)"
         else ->
-            "Turn on \"Allow from this source\" for App Downloader on the next screen."
+            "Turn on \"Allow from this source\" for Silora Updater on the next screen."
     }
 }
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">App Downloader</string>
+    <string name="app_name">Silora Updater</string>
     <string name="channel_updates">App updates</string>
     <string name="channel_updates_desc">Notifies you when a monitored GitHub release has a new version</string>
 </resources>
