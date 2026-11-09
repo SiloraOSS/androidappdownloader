@@ -37,6 +37,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.edrock200.appdownloader.data.FirstRunStep
 import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.work.Notifications
@@ -56,7 +57,11 @@ fun SiloraScreen(vm: MainViewModel) {
     val item = items.firstOrNull { it.entry.id == Silora.ID }
     val snackbar = remember { SnackbarHostState() }
     val pendingInstallAfterPermission = remember { vm.pendingInstallAfterPermission }
+    var firstRunStep by remember { mutableStateOf(vm.firstRunStep) }
+    val firstRunActive = firstRunStep != FirstRunStep.COMPLETE
     var permissionPrompt by rememberSaveable { mutableStateOf(pendingInstallAfterPermission != null) }
+    val firstRunInstall = firstRunStep == FirstRunStep.INSTALL_PERMISSION && !permissionPrompt
+    val showInstallPermission = permissionPrompt || firstRunInstall
     var allowed by remember { mutableStateOf(SystemActions.canInstallPackages(context)) }
     val isTv = rememberIsTv()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -66,14 +71,37 @@ fun SiloraScreen(vm: MainViewModel) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var showShizukuHelp by rememberSaveable { mutableStateOf(false) }
     var showWaiting by rememberSaveable { mutableStateOf(false) }
+    var requestingNotifications by rememberSaveable { mutableStateOf(false) }
     var installAfterPermission by rememberSaveable { mutableStateOf(pendingInstallAfterPermission ?: true) }
-    var showNotificationIntro by rememberSaveable { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Notifications.areEnabled(context)) }
+
+    fun finishFirstRun() {
+        vm.markNotificationPromptSeen()
+        vm.saveFirstRunStep(FirstRunStep.COMPLETE)
+        firstRunStep = FirstRunStep.COMPLETE
+    }
+
+    fun offerNotifications() {
+        if (Notifications.areEnabled(context)) finishFirstRun()
+        else {
+            vm.saveFirstRunStep(FirstRunStep.NOTIFICATIONS)
+            firstRunStep = FirstRunStep.NOTIFICATIONS
+        }
+    }
+
+    fun startPermissionSetup() {
+        if (usingShizuku || SystemActions.canInstallPackages(context)) offerNotifications()
+        else {
+            vm.saveFirstRunStep(FirstRunStep.INSTALL_PERMISSION)
+            firstRunStep = FirstRunStep.INSTALL_PERMISSION
+        }
+    }
     val uninstallForRestore = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         vm.refreshInstalled()
         vm.installAfterRestoreUninstall()
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        requestingNotifications = false
         notificationsEnabled = Notifications.areEnabled(context)
         if (granted) vm.notificationPermissionGranted()
     }
@@ -82,20 +110,17 @@ fun SiloraScreen(vm: MainViewModel) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
             !vm.notificationPermissionAsked) {
             vm.markNotificationPermissionAsked()
+            requestingNotifications = true
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else if (!SystemActions.openNotificationSettings(context)) {
             vm.message("Open your device's Settings to enable notifications for Silora Updater.")
         }
     }
-    LaunchedEffect(settings.checkIntervalHours) {
-        if (settings.checkIntervalHours > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !notificationsEnabled && !vm.notificationPromptSeen) {
-            vm.markNotificationPromptSeen()
-            showNotificationIntro = true
-        }
+    LaunchedEffect(firstRunStep, notificationsEnabled) {
+        if (firstRunStep == FirstRunStep.NOTIFICATIONS && notificationsEnabled) finishFirstRun()
     }
-    LaunchedEffect(item?.waiting, item?.op) {
-        if (item?.waiting == true && item.op == null && !vm.waitingPromptShown) {
+    LaunchedEffect(firstRunActive, requestingNotifications, item?.waiting, item?.op) {
+        if (!firstRunActive && !requestingNotifications && item?.waiting == true && item.op == null && !vm.waitingPromptShown) {
             vm.waitingPromptShown = true
             showWaiting = true
         }
@@ -128,10 +153,12 @@ fun SiloraScreen(vm: MainViewModel) {
     fun dismissInstallPermission() {
         vm.saveInstallPermissionRequest(null)
         permissionPrompt = false
+        if (firstRunInstall) offerNotifications()
     }
 
     fun openInstallSettings() {
-        vm.saveInstallPermissionRequest(installAfterPermission)
+        // First-run setup has its own durable step and must never resume an install.
+        if (!firstRunInstall) vm.saveInstallPermissionRequest(installAfterPermission)
         if (!SystemActions.openInstallPermissionSettings(context)) {
             vm.saveInstallPermissionRequest(null)
             vm.message("Open your device's Settings and allow installs for Silora Updater.")
@@ -158,7 +185,7 @@ fun SiloraScreen(vm: MainViewModel) {
         )
     }
 
-    if (!showSettings && !permissionPrompt && !showShizukuHelp && !restore.active && !showNotificationIntro && !showWaiting) {
+    if (!firstRunActive && !requestingNotifications && !showSettings && !showInstallPermission && !showShizukuHelp && !restore.active && !showWaiting) {
         selfUpdate?.let { update ->
             SelfUpdateDialog(update, ops[io.github.edrock200.appdownloader.AppController.SELF_UPDATE_ID],
                 onUpdate = {
@@ -172,7 +199,22 @@ fun SiloraScreen(vm: MainViewModel) {
         }
     }
 
-    if (permissionPrompt) {
+    if (firstRunStep == FirstRunStep.WELCOME && !permissionPrompt && !restore.active) {
+        AlertDialog(
+            onDismissRequest = ::finishFirstRun,
+            title = { Text("Welcome to Silora Updater") },
+            text = { Text("Install Silora and keep it up to date.\n\n" +
+                "First, we'll help you allow app installs and choose whether to receive update notifications. " +
+                "You can change these permissions later in Settings.") },
+            confirmButton = {
+                TextButton(onClick = ::startPermissionSetup, modifier = Modifier.focusHighlight()) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = ::finishFirstRun, modifier = Modifier.focusHighlight()) { Text("Not now") }
+            },
+        )
+    }
+    if (showInstallPermission) {
         AlertDialog(
             onDismissRequest = ::dismissInstallPermission,
             title = { Text("Allow Silora installs") },
@@ -180,13 +222,16 @@ fun SiloraScreen(vm: MainViewModel) {
             confirmButton = {
                 TextButton(modifier = Modifier.focusHighlight(), onClick = {
                     if (usingShizuku || SystemActions.canInstallPackages(context)) {
+                        val continueInstall = !firstRunInstall && installAfterPermission
                         dismissInstallPermission()
-                        if (installAfterPermission) install()
+                        if (continueInstall) install()
                     } else openInstallSettings()
                 }) { Text(if (allowed) "Continue" else "Open settings") }
             },
             dismissButton = {
-                TextButton(onClick = ::dismissInstallPermission, modifier = Modifier.focusHighlight()) { Text("Cancel") }
+                TextButton(onClick = ::dismissInstallPermission, modifier = Modifier.focusHighlight()) {
+                    Text(if (firstRunInstall) "Not now" else "Cancel")
+                }
             },
         )
     }
@@ -227,7 +272,7 @@ fun SiloraScreen(vm: MainViewModel) {
             hasSavedApk = vm::hasSavedApk, installedVersionCode = item.installed?.versionCode,
             restoreEnabled = !updatingAutomatically && (item.op == null || item.op is io.github.edrock200.appdownloader.OpState.Failed))
     }
-    if ((restore.active || restore.error != null) && item != null && !showSettings && !permissionPrompt && !showShizukuHelp) {
+    if ((restore.active || restore.error != null) && item != null && !showSettings && !showInstallPermission && !showShizukuHelp) {
         InstallRestoreDialog(restore, installed = item.installed != null,
             automaticUpdates = settings.autoInstallUpdates,
             onConfirm = {
@@ -247,7 +292,7 @@ fun SiloraScreen(vm: MainViewModel) {
                 }
             }, onCancel = vm::cancelInstallRestore, onSettings = { showSettings = true })
     }
-    if (showWaiting && item?.waiting == true && !restore.active) {
+    if (!firstRunActive && !requestingNotifications && showWaiting && item?.waiting == true && !restore.active) {
         AlertDialog(onDismissRequest = { showWaiting = false }, title = { Text("Silora update ready") },
             text = { Text(if (usingShizuku) "A background update is downloaded. ${shizuku.help} Choose Install update when ready."
                 else "A background update was downloaded and needs your confirmation to install.") },
@@ -271,11 +316,12 @@ fun SiloraScreen(vm: MainViewModel) {
             }, modifier = Modifier.focusHighlight()) { Text("Open guide") } },
         )
     }
-    if (showNotificationIntro && !showWaiting && !permissionPrompt && !restore.active) {
-        AlertDialog(onDismissRequest = { showNotificationIntro = false }, title = { Text("Get Silora update alerts") },
-            text = { Text("Allow notifications so Silora Updater can tell you when an update is available or needs your confirmation.") },
-            confirmButton = { TextButton(onClick = { showNotificationIntro = false; notificationSettings() }, modifier = Modifier.focusHighlight()) { Text("Enable notifications") } },
-            dismissButton = { TextButton(onClick = { showNotificationIntro = false }, modifier = Modifier.focusHighlight()) { Text("Not now") } },
+    if (firstRunStep == FirstRunStep.NOTIFICATIONS && !permissionPrompt && !restore.active) {
+        AlertDialog(onDismissRequest = ::finishFirstRun, title = { Text("Get Silora update alerts") },
+            text = { Text("Allow notifications so Silora Updater can tell you when an update is available or needs your confirmation.\n\n" +
+                "Notifications are optional. You can enable them later in Settings.") },
+            confirmButton = { TextButton(onClick = { finishFirstRun(); notificationSettings() }, modifier = Modifier.focusHighlight()) { Text("Enable notifications") } },
+            dismissButton = { TextButton(onClick = ::finishFirstRun, modifier = Modifier.focusHighlight()) { Text("Not now") } },
         )
     }
 

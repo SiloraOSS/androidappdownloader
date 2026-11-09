@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- First-open welcome walks through the existing install-permission setup and optional update
+  notifications. Granted permissions are skipped, setup progress survives Android restarts,
+  and completing or skipping setup prevents it from appearing on later opens.
 - Silora Updater now checks its own GitHub releases alongside Silora. The existing automatic
   installation setting and Standard Android / Shizuku installer choice apply to both apps.
   If confirmation is needed, the downloaded updater stays ready to install, including offline.
@@ -14,6 +17,10 @@ All notable changes to this project are documented here. The format follows
   Saved schedules and settings survive, and completed self-updates clear their pending download.
 - Settings includes a manual updater check. Self-updates accept only the dedicated updater APK
   with the expected package and a newer Android version matching its release.
+
+### Changed
+- Automatic update installation is enabled by default. Saved on/off choices are preserved;
+  choosing manual-only checks still disables automatic installation.
 
 ## [1.0.3] - 2026-11-09
 

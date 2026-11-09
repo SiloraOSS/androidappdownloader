@@ -316,6 +316,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setTheme(mode: io.github.edrock200.appdownloader.data.ThemeMode) = saveSettings(app.settings.current.copy(themeMode = mode))
     fun setDeleteAfterInstall(enabled: Boolean) = saveSettings(app.settings.current.copy(deleteApkAfterInstall = enabled))
     val notificationPermissionAsked get() = app.settings.notificationPermissionAsked
+    val firstRunStep get() = app.settings.firstRunStep
+    fun saveFirstRunStep(step: io.github.edrock200.appdownloader.data.FirstRunStep) = app.settings.saveFirstRunStep(step)
     val notificationPromptSeen get() = app.settings.notificationPromptSeen
     fun markNotificationPromptSeen() = app.settings.markNotificationPromptSeen()
     fun markNotificationPermissionAsked() = app.settings.markNotificationPermissionAsked()

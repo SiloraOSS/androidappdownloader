@@ -8,10 +8,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpdatePreferencesTest {
-    @Test fun checksAreEnabledByDefaultButInstallationIsOptIn() {
+    @Test fun checksAndAutomaticInstallationAreEnabledByDefault() {
         val defaults = SettingsState()
         assertEquals(12, defaults.checkIntervalHours)
-        assertFalse(UpdatePreferences.shouldInstall(defaults))
+        assertTrue(UpdatePreferences.shouldInstall(defaults))
     }
 
     @Test fun automaticInstallationFollowsEveryAvailableInterval() {

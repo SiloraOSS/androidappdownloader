@@ -92,4 +92,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
 }

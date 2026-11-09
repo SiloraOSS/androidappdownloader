@@ -15,7 +15,8 @@ the TV asset name stays `SiloraUpdater-tv.apk` across versions.
 
 On your TV, open **Downloader** and enter code **7394471**, or use the APK download link above.
 Allow installation from that source when Android asks, and install **Silora Updater**.
-Open it and choose **Install Silora** or **Update Silora**.
+Open it, follow the one-time welcome and permission setup, then choose **Install Silora**
+or **Update Silora**.
 
 ## How it works
 
@@ -63,12 +64,18 @@ opened/manually, or **Custom** for a daily check at a chosen hour. Selecting Cus
 **Daily check time** with −/+ hour controls that work with a TV remote. Times use the device's
 local time zone and 12/24-hour display preference; the home screen shows the saved daily time.
 Late checks do not shift the following day's chosen hour.
-**Install updates automatically** is a separate, persistent switch (off by default); when on, each background check downloads newer builds of Silora and Silora Updater and attempts installation using the selected installer. Silora is handled first because updating the updater closes its process.
+**Install updates automatically** is a separate, persistent switch (on by default); when on, each background check downloads newer builds of Silora and Silora Updater and attempts installation using the selected installer. Silora is handled first because updating the updater closes its process.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
 Android's power/network restrictions can delay background work. If Android requires confirmation
 or the selected Shizuku connection is unavailable, the download stays ready and the app offers **Install update** when opened, even while offline.
 
-Android 13+ users get an explanation and notification permission request. If notifications are
+On first open, a welcome screen leads to the existing **Allow Silora installs** explanation and
+**Open settings** action. Return from Android's settings and choose **Continue**, then optionally
+enable update notifications. Already-granted permissions are skipped; **Not now** leaves setup
+available through Settings. Progress survives an Android restart while granting install access,
+and completed or skipped setup does not repeat on later opens. Setup alone never installs Silora.
+
+Android 13+ uses the system notification permission request. If notifications are
 denied or disabled, the home screen and Settings show an **Enable notifications** action.
 Update alerts are only marked delivered after they are posted successfully. Some TV launchers do
 not surface notifications; pending updates remain visible in the updater. Settings also offers

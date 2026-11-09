@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import io.github.edrock200.appdownloader.data.Settings
+import io.github.edrock200.appdownloader.data.FirstRunStep
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.data.ThemeMode
@@ -22,7 +23,26 @@ import org.robolectric.annotation.Config
 class UpdateSettingsAndroidTest {
     private val context get() = RuntimeEnvironment.getApplication()
 
+    @Test fun firstRunProgressSurvivesRestartWithoutBecomingAnInstallRequest() {
+        val settings = Settings(context)
+        assertEquals(FirstRunStep.WELCOME, settings.firstRunStep)
+        settings.saveFirstRunStep(FirstRunStep.INSTALL_PERMISSION)
+        val reopened = Settings(context)
+        assertEquals(FirstRunStep.INSTALL_PERMISSION, reopened.firstRunStep)
+        assertNull(reopened.pendingInstallAfterPermission)
+        reopened.saveFirstRunStep(FirstRunStep.NOTIFICATIONS)
+        assertEquals(FirstRunStep.NOTIFICATIONS, Settings(context).firstRunStep)
+    }
+
+    @Test fun completedFirstRunSurvivesSettingsChangesAndRestart() {
+        val settings = Settings(context)
+        settings.saveFirstRunStep(FirstRunStep.COMPLETE)
+        settings.update(settings.current.copy(themeMode = ThemeMode.DARK))
+        assertEquals(FirstRunStep.COMPLETE, Settings(context).firstRunStep)
+    }
+
     @Test fun updateSettingsSurviveReopeningTheApp() {
+        assertTrue(Settings(context).current.autoInstallUpdates)
         Settings(context).update(SettingsState(checkIntervalHours = 6, autoInstallUpdates = true,
             themeMode = ThemeMode.DARK, deleteApkAfterInstall = false))
         val reopened = Settings(context).current
@@ -30,6 +50,8 @@ class UpdateSettingsAndroidTest {
         assertTrue(reopened.autoInstallUpdates)
         assertEquals(ThemeMode.DARK, reopened.themeMode)
         assertFalse(reopened.deleteApkAfterInstall)
+        Settings(context).update(reopened.copy(autoInstallUpdates = false))
+        assertFalse(Settings(context).current.autoInstallUpdates)
     }
 
     @Test fun customDailyHourSurvivesRestartAndReturningToIntervalMode() {

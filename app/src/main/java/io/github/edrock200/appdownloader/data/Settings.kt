@@ -15,7 +15,7 @@ data class SettingsState(
     val checkDaily: Boolean = false,
     val checkHour: Int = 3,
     /** Download and attempt to install newer Silora builds at each background check. */
-    val autoInstallUpdates: Boolean = false,
+    val autoInstallUpdates: Boolean = true,
     /** Device-specific: Shizuku authorization is never restored from a backup. */
     val installMethod: InstallMethod = InstallMethod.STANDARD,
     val deleteApkAfterInstall: Boolean = true,
@@ -39,6 +39,9 @@ enum class ThemeMode(val label: String) {
     DARK("Dark"),
 }
 
+/** Device-local setup progress; never included in configuration backups. */
+enum class FirstRunStep { WELCOME, INSTALL_PERMISSION, NOTIFICATIONS, COMPLETE }
+
 /** How a scheduled update repeats. [hours] > 0 means "every N hours throughout the day". */
 enum class Repeat(val label: String, val hours: Int = 0) {
     ONCE("Once"),
@@ -60,6 +63,16 @@ class Settings(context: Context) {
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     val current: SettingsState get() = _state.value
+
+    val firstRunStep: FirstRunStep
+        get() = runCatching { FirstRunStep.valueOf(prefs.getString(KEY_FIRST_RUN_STEP, null)!!) }
+            .getOrDefault(FirstRunStep.WELCOME)
+
+    @SuppressLint("ApplySharedPref")
+    fun saveFirstRunStep(step: FirstRunStep) {
+        // Install-access settings can kill our process without saving the activity's state.
+        prefs.edit().putString(KEY_FIRST_RUN_STEP, step.name).commit()
+    }
 
     fun update(newState: SettingsState) {
         val normalized = UpdatePreferences.normalize(newState)
@@ -116,7 +129,7 @@ class Settings(context: Context) {
         checkIntervalHours = prefs.getInt(KEY_INTERVAL, 12),
         checkDaily = prefs.getBoolean(KEY_CHECK_DAILY, false),
         checkHour = prefs.getInt(KEY_CHECK_HOUR, 3),
-        autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, false),
+        autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, true),
         installMethod = runCatching { InstallMethod.valueOf(prefs.getString(KEY_INSTALL_METHOD, null)!!) }
             .getOrDefault(InstallMethod.STANDARD),
         deleteApkAfterInstall = prefs.getBoolean(KEY_DELETE, true),
@@ -130,6 +143,7 @@ class Settings(context: Context) {
     )
 
     companion object {
+        private const val KEY_FIRST_RUN_STEP = "first_run_step"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_TOKEN = "github_token"
         private const val KEY_CHECK_DAILY = "check_daily"
