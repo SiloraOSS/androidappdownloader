@@ -5,6 +5,7 @@ A dedicated installer and updater for **Silora**, based on App Downloader by edr
 ## Download for Android TV
 
 - **[Download the latest Android TV APK](https://github.com/SiloraOSS/androidappdownloader/releases/latest/download/SiloraUpdater-tv.apk)**
+- **Downloader code: `7394471`** — [aftvnews.com/7394471](https://aftvnews.com/7394471)
 - [Latest release and notes](https://github.com/SiloraOSS/androidappdownloader/releases/latest)
 - [All releases](https://github.com/SiloraOSS/androidappdownloader/releases)
 
@@ -12,9 +13,9 @@ The current release is for **Android TV / Google TV**. Phone and tablet use has 
 tested and is not part of this release. These links always point to the latest release;
 the TV asset name stays `SiloraUpdater-tv.apk` across versions.
 
-Download the APK on your TV (for example, using Downloader), allow installation from that
-source when Android asks, and install **Silora Updater**. Open it and choose **Install Silora**
-or **Update Silora**. No Downloader short code has been assigned for this fork.
+On your TV, open **Downloader** and enter code **7394471**, or use the APK download link above.
+Allow installation from that source when Android asks, and install **Silora Updater**.
+Open it and choose **Install Silora** or **Update Silora**.
 
 ## How it works
 
