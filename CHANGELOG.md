@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Default TV remote focus to Check for updates when opening the dashboard, returning
+  from dialogs or permission setup, and finishing an update check.
+
 ### Added
 - Custom daily update checks: choose Custom in Settings, then pick an hour of the day
   with the remote-friendly time controls. The saved schedule follows the device's local

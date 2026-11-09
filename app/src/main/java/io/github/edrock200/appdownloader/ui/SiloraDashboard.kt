@@ -3,6 +3,7 @@ package io.github.edrock200.appdownloader.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -36,8 +37,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -53,6 +60,7 @@ import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.install.ShizukuState
 
 /** Presentation only; permission handling and all update actions stay in SiloraScreen. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SiloraDashboard(
     item: EntryUi?,
@@ -77,7 +85,13 @@ internal fun SiloraDashboard(
 ) {
     val colors = MaterialTheme.colorScheme
     val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.background).background(Brush.verticalGradient(
+    val checkFocus = remember { FocusRequester() }
+    val checkEnabled = item != null && !checking && !restoring && (item.op == null || item.op is OpState.Failed)
+    // Route fresh focus (including after closing a dialog) to the check action.
+    val defaultFocus = if (isTv) Modifier.focusProperties {
+        enter = { if (checkEnabled) checkFocus else FocusRequester.Default }
+    }.focusGroup() else Modifier
+    BoxWithConstraints(modifier.then(defaultFocus).fillMaxSize().background(colors.background).background(Brush.verticalGradient(
         listOf(colors.primaryContainer.copy(alpha = 0.32f), colors.background, colors.background),
     ))) {
         val wide = maxWidth >= 840.dp
@@ -112,7 +126,7 @@ internal fun SiloraDashboard(
             }
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
-                    onInstall, onCheck, onOpen, onCancel, restoring, cardModifier)
+                    onInstall, onCheck, onOpen, onCancel, restoring, checkFocus, cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
@@ -154,6 +168,7 @@ private fun SiloraUpdateCard(
     usingShizuku: Boolean, shizuku: ShizukuState, canOpen: Boolean, isTv: Boolean, compact: Boolean,
     onInstall: () -> Unit, onCheck: () -> Unit, onOpen: () -> Unit, onCancel: () -> Unit,
     restoring: Boolean,
+    checkFocus: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -162,6 +177,13 @@ private fun SiloraUpdateCard(
     val known = item?.entry?.latestVersionCode != null && item.entry.lastCheckError == null
     val error = op is OpState.Failed || item?.entry?.lastCheckError != null
     val current = item != null && item.installed != null && known && !item.hasUpdate && !item.waiting
+    val checkPrimary = !known && item?.installed != null && !item.waiting
+    val checkEnabled = item != null && !busy && !checking
+    // Checking disables the button; restore focus when it is enabled again, even
+    // if the result moved the check action from the primary to the secondary slot.
+    LaunchedEffect(isTv, checkEnabled, checkPrimary) {
+        if (isTv && checkEnabled) checkFocus.requestFocus()
+    }
     Card(modifier, shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = colors.surface),
         border = BorderStroke(1.dp, colors.outlineVariant)) {
@@ -210,12 +232,13 @@ private fun SiloraUpdateCard(
                     else LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
                 val openPrimary = canOpen && current
-                val checkPrimary = !known && item.installed != null && !item.waiting
                 val primaryAction: @Composable (Modifier) -> Unit = { actionModifier ->
                     Button(
                         onClick = { when { openPrimary -> onOpen(); checkPrimary -> onCheck(); else -> onInstall() } },
                         enabled = !busy && !checking && (openPrimary || checkPrimary || item.installed == null || item.hasUpdate || item.waiting),
-                        modifier = actionModifier.heightIn(min = 52.dp).focusHighlight(scaleUp = false),
+                        modifier = actionModifier
+                            .then(if (checkPrimary) Modifier.focusRequester(checkFocus) else Modifier)
+                            .heightIn(min = 52.dp).focusHighlight(scaleUp = false),
                     ) {
                         Text(when {
                             busy -> "Please wait…"
@@ -232,7 +255,7 @@ private fun SiloraUpdateCard(
                 }
                 val secondaryAction: @Composable (Modifier) -> Unit = { actionModifier ->
                     OutlinedButton(onClick = onCheck, enabled = !busy && !checking,
-                        modifier = actionModifier.heightIn(min = 52.dp).focusHighlight(scaleUp = false)) {
+                        modifier = actionModifier.focusRequester(checkFocus).heightIn(min = 52.dp).focusHighlight(scaleUp = false)) {
                         Icon(Icons.Default.Refresh, contentDescription = null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Check for updates")
