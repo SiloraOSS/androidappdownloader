@@ -20,6 +20,10 @@ data class InstallRecord(
     val byApp: Boolean = true,
     /** True when done by a scheduled update rather than by the user. */
     val automatic: Boolean = false,
+    /** A retained APK in the updater's cache; Android may remove it to reclaim space. */
+    val apkPath: String? = null,
+    /** Identifies the exact installed file even if a release asset is later replaced. */
+    val apkSha256: String? = null,
 )
 
 /** Rules for an app's update history (pure, for tests). */

@@ -12,6 +12,8 @@ class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val controller = context.app().controller
         val entryId = intent.getStringExtra(ApkInstaller.EXTRA_ENTRY_ID) ?: return
+        val restoreAttemptId = intent.getStringExtra(ApkInstaller.EXTRA_RESTORE_ATTEMPT)
+        if (!controller.acceptsInstallResult(entryId, restoreAttemptId)) return
         val status = if (intent.getBooleanExtra(ApkInstaller.EXTRA_SHIZUKU, false)) resultCode
             else intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val background = intent.getBooleanExtra(ApkInstaller.EXTRA_BACKGROUND, false)
@@ -28,14 +30,14 @@ class InstallResultReceiver : BroadcastReceiver() {
                 }
                 val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
                 if (confirm == null) {
-                    controller.onInstallFailed(entryId, status, "Installer did not provide a confirmation screen")
+                    controller.onInstallFailed(entryId, status, "Installer did not provide a confirmation screen", restoreAttemptId = restoreAttemptId)
                     return
                 }
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 try {
                     context.startActivity(confirm)
                 } catch (e: Exception) {
-                    controller.onInstallFailed(entryId, status, "Could not show the install prompt: ${e.message}")
+                    controller.onInstallFailed(entryId, status, "Could not show the install prompt: ${e.message}", restoreAttemptId = restoreAttemptId)
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> controller.onInstallSucceeded(
@@ -46,12 +48,14 @@ class InstallResultReceiver : BroadcastReceiver() {
                 background = background,
                 previousVersionName = intent.getStringExtra(ApkInstaller.EXTRA_PREV_VERSION_NAME),
                 previousVersionCode = intent.getLongExtra(ApkInstaller.EXTRA_PREV_VERSION_CODE, -1L).takeIf { it >= 0 },
+                restoreAttemptId = restoreAttemptId,
             )
             else -> controller.onInstallFailed(
                 entryId,
                 status,
                 intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),
                 keepDownload = intent.getBooleanExtra(ApkInstaller.EXTRA_KEEP_DOWNLOAD, false),
+                restoreAttemptId = restoreAttemptId,
             )
         }
     }

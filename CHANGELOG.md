@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Past installs beside Settings lists recorded builds and restores a saved APK or that exact
+  GitHub release on demand, without scanning or polling release history. APKs are prepared and
+  checked before an explicit uninstall/reinstall confirmation warning that local Silora data,
+  sign-in, settings and downloads will be deleted. Cancelled/blocked uninstalls never install;
+  interrupted installs retain the APK and restore progress for retry. Successful restores turn
+  automatic installation off so they are not immediately replaced by an update.
+- Versioned cached APK retention when download cleanup is off, plus SHA-256 fingerprints for
+  newly recorded installs to detect changed release files before restoring.
 - Optional Shizuku installation with saved installer selection, authorization, live readiness,
   and TV-friendly setup actions. Supports unattended updates on older Android / Android TV
   while Shizuku is running and authorized, without requiring unknown-apps permission.
@@ -34,7 +42,7 @@ All notable changes to this project are documented here. The format follows
   violet light/dark themes, clearer release status and version details, and a responsive
   update dashboard with visible remote focus. Appearance still follows the saved theme choice.
 - Dedicated Silora Updater with one permanent Silora entry and no source setup, editing,
-  removal, uninstall, or backup/restore controls. Selects the phone or TV APK automatically.
+  removal, standalone uninstall, or configuration backup/restore controls. Selects the phone or TV APK automatically.
 - Recognizes existing `org.silora.app` installs and compares the published Android version code
   instead of date-based release tags. Prevents reinstalling the same or an older build.
 - Uses its own `org.silora.updater` identity. Upstream App Downloader self-updates are disabled.

@@ -2,6 +2,8 @@ package io.github.edrock200.appdownloader.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,14 +40,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.work.Notifications
+import kotlinx.coroutines.launch
 
-/** A fixed, remote-friendly front door: no source setup, editor, removal or restore controls. */
+/** A fixed, remote-friendly front door with an explicitly confirmed past-install restore. */
 @Composable
 fun SiloraScreen(vm: MainViewModel) {
     val context = LocalContext.current
     val items by vm.items.collectAsStateWithLifecycle()
     val checking by vm.checking.collectAsStateWithLifecycle()
     val updatingAutomatically by vm.updatingAll.collectAsStateWithLifecycle()
+    val restore by vm.installRestore.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val item = items.firstOrNull { it.entry.id == Silora.ID }
     val snackbar = remember { SnackbarHostState() }
     val pendingInstallAfterPermission = remember { vm.pendingInstallAfterPermission }
@@ -61,6 +67,10 @@ fun SiloraScreen(vm: MainViewModel) {
     var installAfterPermission by rememberSaveable { mutableStateOf(pendingInstallAfterPermission ?: true) }
     var showNotificationIntro by rememberSaveable { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(Notifications.areEnabled(context)) }
+    val uninstallForRestore = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        vm.refreshInstalled()
+        vm.installAfterRestoreUninstall()
+    }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         notificationsEnabled = Notifications.areEnabled(context)
         if (granted) vm.notificationPermissionGranted()
@@ -91,6 +101,7 @@ fun SiloraScreen(vm: MainViewModel) {
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.refreshShizuku()
+        vm.refreshInstallRestore()
         allowed = SystemActions.canInstallPackages(context)
         val enabled = Notifications.areEnabled(context)
         if (enabled && !notificationsEnabled) vm.notificationPermissionGranted()
@@ -138,6 +149,7 @@ fun SiloraScreen(vm: MainViewModel) {
             onOpen = { SystemActions.launchApp(context, Silora.PACKAGE) },
             onCancel = { vm.clearOp(Silora.ID) },
             onSettings = { showSettings = true },
+            onHistory = { showHistory = true }, restoring = restore.active,
             onInstallPermission = { installAfterPermission = false; permissionPrompt = true },
             onNotifications = ::notificationSettings,
             modifier = Modifier.padding(padding),
@@ -192,8 +204,33 @@ fun SiloraScreen(vm: MainViewModel) {
             onDismiss = { showSettings = false },
         )
     }
-    if (showHistory) item?.entry?.let { HistoryDialog(it, onDismiss = { showHistory = false }) }
-    if (showWaiting && item?.waiting == true) {
+    if (showHistory && !restore.active) item?.entry?.let {
+        HistoryDialog(it, onDismiss = { showHistory = false },
+            onRestore = { record -> showHistory = false; vm.prepareInstallRestore(record) },
+            hasSavedApk = vm::hasSavedApk, installedVersionCode = item.installed?.versionCode,
+            restoreEnabled = !updatingAutomatically && (item.op == null || item.op is io.github.edrock200.appdownloader.OpState.Failed))
+    }
+    if ((restore.active || restore.error != null) && item != null && !showSettings && !permissionPrompt && !showShizukuHelp) {
+        InstallRestoreDialog(restore, installed = item.installed != null,
+            automaticUpdates = settings.autoInstallUpdates,
+            onConfirm = {
+                scope.launch {
+                    vm.refreshInstalled()
+                    val uninstall = vm.confirmInstallRestore(item.installed?.versionCode) ?: return@launch
+                    if (uninstall) {
+                        try {
+                            @Suppress("DEPRECATION")
+                            val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:${Silora.PACKAGE}"))
+                                .putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                            uninstallForRestore.launch(intent)
+                        } catch (_: Exception) {
+                            vm.restoreError("Could not open Android's uninstall confirmation. Nothing was uninstalled.")
+                        }
+                    } else vm.installAfterRestoreUninstall()
+                }
+            }, onCancel = vm::cancelInstallRestore, onSettings = { showSettings = true })
+    }
+    if (showWaiting && item?.waiting == true && !restore.active) {
         AlertDialog(onDismissRequest = { showWaiting = false }, title = { Text("Silora update ready") },
             text = { Text(if (usingShizuku) "A background update is downloaded. ${shizuku.help} Choose Install update when ready."
                 else "A background update was downloaded and needs your confirmation to install.") },
@@ -217,7 +254,7 @@ fun SiloraScreen(vm: MainViewModel) {
             }, modifier = Modifier.focusHighlight()) { Text("Open guide") } },
         )
     }
-    if (showNotificationIntro && !showWaiting && !permissionPrompt) {
+    if (showNotificationIntro && !showWaiting && !permissionPrompt && !restore.active) {
         AlertDialog(onDismissRequest = { showNotificationIntro = false }, title = { Text("Get Silora update alerts") },
             text = { Text("Allow notifications so Silora Updater can tell you when an update is available or needs your confirmation.") },
             confirmButton = { TextButton(onClick = { showNotificationIntro = false; notificationSettings() }, modifier = Modifier.focusHighlight()) { Text("Enable notifications") } },

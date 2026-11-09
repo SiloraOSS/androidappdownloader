@@ -21,6 +21,7 @@ object ApkInstaller {
     const val EXTRA_BACKGROUND = "background"
     const val EXTRA_KEEP_DOWNLOAD = "keep_download"
     const val EXTRA_SHIZUKU = "shizuku_result"
+    const val EXTRA_RESTORE_ATTEMPT = "restore_attempt"
     /** Version on the device before this install (for the update history); absent if not installed. */
     const val EXTRA_PREV_VERSION_NAME = "prev_version_name"
     const val EXTRA_PREV_VERSION_CODE = "prev_version_code"
@@ -34,6 +35,7 @@ object ApkInstaller {
         background: Boolean = false,
         previousVersionName: String? = null,
         previousVersionCode: Long? = null,
+        restoreAttemptId: String? = null,
     ) {
         val installer = context.packageManager.packageInstaller
         // Drop earlier sessions for the same app that were never confirmed.
@@ -72,7 +74,7 @@ object ApkInstaller {
             }
 
             session.commit(resultCallback(context, sessionId, file, info, entryId, releaseTag, background,
-                previousVersionName, previousVersionCode).intentSender)
+                previousVersionName, previousVersionCode, restoreAttemptId = restoreAttemptId).intentSender)
             session.close()
         } catch (e: Exception) {
             session.abandon()
@@ -85,6 +87,7 @@ object ApkInstaller {
         context: Context, requestCode: Int, file: File, info: ApkInfo, entryId: String, releaseTag: String?,
         background: Boolean, previousVersionName: String?, previousVersionCode: Long?,
         viaShizuku: Boolean = false,
+        restoreAttemptId: String? = null,
     ): PendingIntent {
         val callback = Intent(context, InstallResultReceiver::class.java)
             .setData(android.net.Uri.parse("silora-updater://install/${java.util.UUID.randomUUID()}"))
@@ -98,6 +101,7 @@ object ApkInstaller {
             .putExtra(EXTRA_PREV_VERSION_CODE, previousVersionCode ?: -1L)
             .putExtra(EXTRA_SHIZUKU, viaShizuku)
             .putExtra(EXTRA_KEEP_DOWNLOAD, viaShizuku)
+            .putExtra(EXTRA_RESTORE_ATTEMPT, restoreAttemptId)
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (viaShizuku && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags = flags or PendingIntent.FLAG_IMMUTABLE
         else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE

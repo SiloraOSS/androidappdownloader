@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import okhttp3.Request
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 
 @Serializable
@@ -51,6 +52,28 @@ object GitHubClient {
         RegexOption.IGNORE_CASE,
     )
     private val SLUG = Regex("^(?:gh:|github:)([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$", RegexOption.IGNORE_CASE)
+
+    /** Fetches this exact past release, including releases outside the latest-release page. */
+    suspend fun findSiloraRelease(tag: String, isTv: Boolean, token: String?): ReleaseMatch = withContext(Dispatchers.IO) {
+        val url = "https://api.github.com/repos/${Silora.REPO}/releases/tags".toHttpUrl()
+            .newBuilder().addPathSegment(tag).build()
+        val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+        if (!token.isNullOrBlank()) request.header("Authorization", "Bearer $token")
+        val release = Http.execute(request.build()).use { response ->
+            if (response.code == 404) throw IOException("This past release is no longer available on GitHub.")
+            if (!response.isSuccessful) throw IOException("Could not check the past release (HTTP ${response.code}). Try again later.")
+            json.decodeFromString<GhRelease>(response.body?.string() ?: throw IOException("Empty release information"))
+        }
+        pastSiloraRelease(release, tag, isTv)
+    }
+
+    fun pastSiloraRelease(release: GhRelease, tag: String, isTv: Boolean): ReleaseMatch {
+        if (release.tagName != tag || release.draft) throw IOException("The past release does not match the selected install.")
+        val asset = release.assets.firstOrNull { it.name == Silora.assetName(isTv) }
+            ?: throw IOException("This past release no longer has an APK for this device.")
+        return ReleaseMatch(release, asset)
+    }
 
     /** Accepts `https://github.com/owner/repo[/...]`, `github.com/owner/repo` or `github:owner/repo`. */
     fun parseRepo(input: String): RepoRef? {

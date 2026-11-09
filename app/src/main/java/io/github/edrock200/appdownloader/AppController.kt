@@ -18,6 +18,9 @@ import io.github.edrock200.appdownloader.install.ApkInfo
 import io.github.edrock200.appdownloader.install.ApkInspector
 import io.github.edrock200.appdownloader.install.ApkInstaller
 import io.github.edrock200.appdownloader.install.InstalledApps
+import io.github.edrock200.appdownloader.install.InstallRestoreState
+import io.github.edrock200.appdownloader.install.InstallRestoreStore
+import io.github.edrock200.appdownloader.install.PendingInstallRestore
 import io.github.edrock200.appdownloader.install.ShizukuInstaller
 import io.github.edrock200.appdownloader.install.NotAnApkException
 import io.github.edrock200.appdownloader.net.AftvResolver
@@ -117,6 +120,10 @@ class AppController(
     val messages: SharedFlow<String> = _messages
 
     private val jobs = mutableMapOf<String, Job>()
+    private val restoreStore = InstallRestoreStore(context)
+    private val _installRestore = MutableStateFlow(InstallRestoreState(pending = restoreStore.load()))
+    val installRestore: StateFlow<InstallRestoreState> = _installRestore.asStateFlow()
+    private var restoreJob: Job? = null
 
     companion object {
         /** Operation id used for updating this app itself. */
@@ -131,7 +138,154 @@ class AppController(
         setOp(id, null)
     }
 
-    fun isBusy(id: String) = _ops.value[id].let { it != null && it !is OpState.Failed }
+    fun isBusy(id: String) = (id == Silora.ID && _installRestore.value.active) ||
+        _ops.value[id].let { it != null && it !is OpState.Failed }
+
+    // ---------------------------------------------------------- past installs
+
+    fun hasSavedApk(record: InstallRecord) = restoreStore.localApk(record) != null
+
+    /** Downloads/copies and validates the complete APK BEFORE offering a destructive restore. */
+    fun prepareInstallRestore(record: InstallRecord) {
+        if (isBusy(Silora.ID) || _updatingAll.value || restoreJob?.isActive == true) return
+        if (repository.get(Silora.ID)?.history?.contains(record) != true) return
+        _installRestore.value = InstallRestoreState(preparing = true)
+        restoreJob = scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    restoreStore.clear()
+                    val local = restoreStore.localApk(record)
+                    if (local != null) {
+                        restoreStore.stage(local)
+                    } else {
+                        val tag = record.tag ?: throw IOException("No saved APK or GitHub release is recorded for this install.")
+                        val match = GitHubClient.findSiloraRelease(tag,
+                            io.github.edrock200.appdownloader.ui.Device.isTv(context), settings.current.githubToken)
+                        val result = ApkDownloader.download(match.asset.downloadUrl, restoreStore.apk.parentFile!!, "download") { }
+                        try { restoreStore.stage(result.file) } finally { result.file.delete() }
+                    }
+                    val checksum = InstallRestoreStore.sha256(restoreStore.apk)
+                    InstallRestoreStore.validate(record, ApkInspector.inspect(context, restoreStore.apk), checksum)
+                    val pending = PendingInstallRestore(record, checksum)
+                    restoreStore.save(pending)
+                    _installRestore.value = InstallRestoreState(pending = pending)
+                }
+            } catch (e: CancellationException) {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { restoreStore.clear() }
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.IO) { restoreStore.clear() }
+                _installRestore.value = InstallRestoreState(error = e.message ?: "Could not prepare this past install")
+            }
+        }
+    }
+
+    fun cancelInstallRestore() {
+        if (_installRestore.value.pending?.installing == true ||
+            (_installRestore.value.pending != null && _installRestore.value.preparing)) return
+        val previousJob = restoreJob
+        previousJob?.cancel()
+        _installRestore.update { it.copy(preparing = true) }
+        restoreJob = scope.launch {
+            previousJob?.join()
+            repository.update(Silora.ID) { entry ->
+                if (entry.readyFile == restoreStore.apk.absolutePath) entry.clearReady() else entry
+            }
+            withContext(Dispatchers.IO) { restoreStore.clear() }
+            _installRestore.value = InstallRestoreState()
+        }
+    }
+
+    fun restoreError(message: String) { _installRestore.update { it.copy(error = message) } }
+
+    /** Called ONLY from the explicit data-loss confirmation. Returns whether Android must uninstall. */
+    suspend fun confirmInstallRestore(expectedInstalledVersionCode: Long?): Boolean? {
+        val pending = _installRestore.value.pending ?: return null
+        if (pending.installing || _installRestore.value.preparing) return null
+        _installRestore.update { it.copy(preparing = true, error = null) }
+        return try {
+            // Check installation access before removing the user's working copy.
+            if (settings.current.installMethod == InstallMethod.SHIZUKU) {
+                val state = context.app().shizuku.awaitReady()
+                if (!state.ready) throw IOException(state.help)
+            } else if (!io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(context)) {
+                throw IOException("Allow installs for Silora Updater before restoring. Open Settings → Allow installs, then return here.")
+            }
+            withContext(Dispatchers.IO) {
+                val checksum = InstallRestoreStore.sha256(restoreStore.apk)
+                require(checksum == pending.sha256) { "The saved restore APK has changed. Cancel and select the install again." }
+                InstallRestoreStore.validate(pending.record, ApkInspector.inspect(context, restoreStore.apk), checksum)
+            }
+            val installed = InstalledApps.get(context, Silora.PACKAGE)
+            if (installed?.versionCode != expectedInstalledVersionCode) {
+                throw IOException("Silora's installed version changed. Review the restore warning and try again.")
+            }
+            val confirmed = pending.copy(confirmed = true, installing = false, attemptId = null,
+                previousVersionName = installed?.versionName ?: pending.previousVersionName,
+                previousVersionCode = installed?.versionCode ?: pending.previousVersionCode)
+            withContext(Dispatchers.IO) { restoreStore.save(confirmed) }
+            _installRestore.value = InstallRestoreState(pending = confirmed)
+            installed != null
+        } catch (e: CancellationException) {
+            _installRestore.update { it.copy(preparing = false) }
+            throw e
+        } catch (e: Exception) {
+            _installRestore.update { it.copy(preparing = false, error = e.message ?: "Could not start restore") }
+            null
+        }
+    }
+
+    /** A result code alone is insufficient: cancelled/blocked uninstalls must never install. */
+    fun installAfterRestoreUninstall() {
+        val pending = _installRestore.value.pending ?: return
+        if (!pending.confirmed || pending.installing || _installRestore.value.preparing) return
+        if (InstalledApps.get(context, Silora.PACKAGE) != null) {
+            restoreError("Silora is still installed. The uninstall was cancelled or blocked; nothing was restored.")
+            return
+        }
+        _installRestore.update { it.copy(preparing = true, error = null) }
+        restoreJob = scope.launch {
+            try {
+                val apk = withContext(Dispatchers.IO) {
+                    val checksum = InstallRestoreStore.sha256(restoreStore.apk)
+                    require(checksum == pending.sha256) { "The restore APK has changed. Cancel and select the install again." }
+                    val info = ApkInspector.inspect(context, restoreStore.apk)
+                    InstallRestoreStore.validate(pending.record, info, checksum)
+                    DownloadedApk(restoreStore.apk, info)
+                }
+                val installing = pending.copy(installing = true, attemptId = java.util.UUID.randomUUID().toString())
+                withContext(Dispatchers.IO) { restoreStore.save(installing) }
+                _installRestore.value = InstallRestoreState(pending = installing)
+                install(Silora.ID, apk, pending.record.tag, restoreAttemptId = installing.attemptId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setOp(Silora.ID, null)
+                resetRestoreForRetry(e.message ?: "Restore installation failed. Try again.")
+            }
+        }
+    }
+
+    /** If a result was lost with the process, verify Android before offering an explicit retry. */
+    fun refreshInstallRestore() {
+        val pending = _installRestore.value.pending ?: return
+        if (!pending.installing || restoreJob?.isActive == true || _ops.value[Silora.ID] == OpState.Installing) return
+        val installed = InstalledApps.get(context, Silora.PACKAGE)
+        if (installed?.versionCode == pending.record.versionCode) {
+            onInstallSucceeded(Silora.ID, pending.record.tag, pending.record.versionCode, restoreStore.apk.absolutePath,
+                restoreAttemptId = pending.attemptId)
+        } else {
+            if (context.packageManager.packageInstaller.mySessions.any { it.appPackageName == Silora.PACKAGE }) return
+            scope.launch { resetRestoreForRetry("Restore did not finish. Choose Continue to try again.") }
+        }
+    }
+
+    private suspend fun resetRestoreForRetry(message: String) {
+        val pending = _installRestore.value.pending ?: return
+        val retry = pending.copy(installing = false, attemptId = null)
+        withContext(Dispatchers.IO) { restoreStore.save(retry) }
+        _installRestore.value = InstallRestoreState(pending = retry, error = message)
+    }
 
     // ---------------------------------------------------------------- install
 
@@ -209,8 +363,12 @@ class AppController(
         return DownloadedApk(result.file, info, result.fingerprint)
     }
 
-    private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false) {
+    private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false,
+        restoreAttemptId: String? = null) {
         val previous = InstalledApps.get(context, apk.packageName)
+        if (restoreAttemptId != null) {
+            check(previous == null) { "Silora is installed again. Confirm the uninstall and restore again before continuing." }
+        }
         if (opId == Silora.ID) {
             require(apk.packageName == Silora.PACKAGE) { "This is not a Silora APK" }
             if (previous != null && apk.info.versionCode <= previous.versionCode) {
@@ -227,7 +385,8 @@ class AppController(
             repository.update(opId) { it.copy(readyFile = apk.file.absolutePath,
                 readyVersionName = apk.info.versionName, readyVersionCode = apk.info.versionCode, readyTag = releaseTag) }
             val callback = ApkInstaller.resultCallback(context, 0, apk.file, apk.info, opId, releaseTag,
-                background, previous?.versionName, previous?.versionCode, viaShizuku = true)
+                background, previous?.versionName, previous?.versionCode, viaShizuku = true,
+                restoreAttemptId = restoreAttemptId)
             ShizukuInstaller.install(context, apk.file, apk.info, callback.intentSender)
             val complete = withTimeoutOrNull(15_000) { _ops.first { it[opId] != OpState.Installing } }
                 ?: throw IOException("Installation finished but no result was received. Reopen the updater to check Silora.")
@@ -239,6 +398,7 @@ class AppController(
                 context, apk.file, apk.info, opId, releaseTag, background,
                 previousVersionName = previous?.versionName,
                 previousVersionCode = previous?.versionCode,
+                restoreAttemptId = restoreAttemptId,
             )
         }
     }
@@ -276,6 +436,13 @@ class AppController(
         val label get() = info.label
     }
 
+    /** Ignore late callbacks from a cancelled attempt once a different restore has started. */
+    fun acceptsInstallResult(entryId: String, restoreAttemptId: String?): Boolean {
+        val pending = _installRestore.value.pending.takeIf { entryId == Silora.ID }
+        return if (restoreAttemptId != null) pending?.installing == true && restoreAttemptId == pending.attemptId
+        else pending?.installing != true || pending.attemptId == null
+    }
+
     fun onInstallSucceeded(
         entryId: String,
         releaseTag: String?,
@@ -284,19 +451,38 @@ class AppController(
         background: Boolean = false,
         previousVersionName: String? = null,
         previousVersionCode: Long? = null,
+        restoreAttemptId: String? = null,
     ) {
-        setOp(entryId, null)
+        if (!acceptsInstallResult(entryId, restoreAttemptId)) return
         scope.launch {
             val nowInstalled = InstalledApps.get(context, repository.get(entryId)?.packageName)
+            val restored = _installRestore.value.pending?.takeIf {
+                entryId == Silora.ID && it.installing && filePath == restoreStore.apk.absolutePath
+            }
+            val previousName = restored?.previousVersionName ?: previousVersionName
+            val previousCode = restored?.previousVersionCode ?: previousVersionCode
+            // Keep the exact file's identity; retention is optional and must never hide a successful install.
+            val artifact = withContext(Dispatchers.IO) {
+                filePath?.let(::File)?.takeIf { it.isFile }?.let { file ->
+                    runCatching {
+                        val sha256 = InstallRestoreStore.sha256(file)
+                        val retained = if (!settings.current.deleteApkAfterInstall)
+                            runCatching { restoreStore.retain(file, sha256) }.getOrNull() else null
+                        retained to sha256
+                    }.getOrNull()
+                }
+            }
             val record = InstallRecord(
                 at = System.currentTimeMillis(),
                 versionName = nowInstalled?.versionName,
                 versionCode = versionCode.takeIf { it >= 0 } ?: nowInstalled?.versionCode ?: 0,
-                previousVersionName = previousVersionName,
-                previousVersionCode = previousVersionCode,
+                previousVersionName = previousName,
+                previousVersionCode = previousCode,
                 tag = releaseTag,
-                kind = History.kindOf(previousVersionCode, versionCode.takeIf { it >= 0 } ?: nowInstalled?.versionCode ?: 0),
+                kind = History.kindOf(previousCode, versionCode.takeIf { it >= 0 } ?: nowInstalled?.versionCode ?: 0),
                 automatic = background,
+                apkPath = artifact?.first,
+                apkSha256 = artifact?.second,
             )
             repository.update(entryId) { e ->
                 val installedFp = e.pendingFingerprint
@@ -311,12 +497,20 @@ class AppController(
                     notifiedTag = releaseTag ?: e.notifiedTag,
                 )
             }
+            if (restored != null) {
+                // Avoid immediately upgrading away from the version the user deliberately restored.
+                settings.update(settings.current.copy(autoInstallUpdates = false))
+                withContext(Dispatchers.IO) { restoreStore.clear() }
+                _installRestore.value = InstallRestoreState()
+            }
             if (settings.current.deleteApkAfterInstall && filePath != null) {
                 withContext(Dispatchers.IO) { File(filePath).delete() }
             }
+            setOp(entryId, null)
             val entry = repository.get(entryId)
             Notifications.cancelUpdates(context)
-            _messages.tryEmit("Installed ${entry?.name ?: "app"}")
+            _messages.tryEmit(if (restored != null) "Restored Silora. Automatic installation is now off."
+                else "Installed ${entry?.name ?: "app"}")
             if (background && entry != null) {
                 Notifications.showAutoUpdated(context, entry, InstalledApps.get(context, entry.packageName)?.versionName)
             }
@@ -333,7 +527,16 @@ class AppController(
     /** Entries with a downloaded update waiting to be installed. */
     fun waitingUpdates(): List<AppEntry> = repository.entries.value.filter { it.readyFile != null && !isBusy(it.id) }
 
-    fun onInstallFailed(entryId: String, status: Int, message: String?, keepDownload: Boolean = false) {
+    fun onInstallFailed(entryId: String, status: Int, message: String?, keepDownload: Boolean = false,
+        restoreAttemptId: String? = null) {
+        if (!acceptsInstallResult(entryId, restoreAttemptId)) return
+        if (entryId == Silora.ID && _installRestore.value.pending?.installing == true) {
+            setOp(entryId, null)
+            scope.launch { resetRestoreForRetry(if (status == PackageInstaller.STATUS_FAILURE_ABORTED)
+                "Restore installation cancelled. Silora may be uninstalled; choose Continue to install the saved build."
+                else "Restore installation failed. ${message.orEmpty()} The saved build is ready to retry.") }
+            return
+        }
         if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
             setOp(entryId, null)
             _messages.tryEmit("Installation cancelled")

@@ -4,19 +4,40 @@ A dedicated installer and updater for **Silora**, based on App Downloader by edr
 
 - Install this updater, open it, and choose **Install Silora** or **Update Silora**.
 - Silora is built in permanently. Users cannot edit its source, remove it, add other apps,
-  uninstall Silora from the updater, or replace the configuration through a backup.
+  or replace the configuration through a backup.
 - Fire TV / Android TV / Google TV get `silora-tv.apk`; phones and tablets get `silora-phone.apk`.
 - Downloads stable releases from `SiloraOSS/silora-android`. Existing `org.silora.app` installs
   are recognized immediately, including copies installed through Downloader or Obtainium.
 - Update checks use the release's `build-info.json` Android version code, including the phone/TV
   multiplier. The APK's package and version must match before installation. The same or an older
-  version is never installed over a newer copy.
+  version is never installed over a newer copy through the normal update flow.
 - Choose the Standard Android installer or Shizuku under Settings → App installation method.
   Shizuku enables unattended updates on older Android / Android TV devices when it is running
   and Silora Updater is authorized. The standard method keeps Android's usual install permission
   and confirmation requirements. Updates preserve Silora's
   data when the installed copy uses the same signing key. An incompatible signature must be
-  resolved separately; the updater does not uninstall Silora or erase its data.
+  resolved separately; normal updates never uninstall Silora or erase its data.
+
+**Past installs**, beside Settings, lists installs recorded on this device. Choose a build to
+restore a saved APK, or download that exact release again if it still exists on GitHub.
+Opening the list makes no GitHub requests; selecting a build without a local APK makes one
+release-by-tag lookup, followed by its APK download. There is no release scan or background
+polling of history. Installs made outside the updater may have no saved APK or release to restore.
+
+Restoring is explicitly **uninstall, then install**: Android cannot normally install an older
+build over a newer one. The complete APK is saved and checked before the final confirmation.
+The warning explains that uninstalling removes Silora's local data, settings, sign-in and
+downloads; restoring a version does not restore that data. Android then asks to uninstall,
+and installation proceeds only after the updater verifies Silora is absent. Cancelling or
+blocking the uninstall stops the sequence. Interrupted or failed installs keep the staged APK
+and restore progress for an explicit retry, including after restarting the updater.
+After a successful restore, automatic installation is switched off so it does not immediately
+replace the restored version; background checks keep their existing schedule.
+
+With **Delete APK after installing** off, each successful install keeps a separate cached APK
+for local restores. With cleanup on (the default), the exact release must still be available.
+Android can clear cached APKs when storage is low. New history records also keep a SHA-256
+fingerprint to reject replaced files, even when their package and version still match.
 
 The updater installs separately as `org.silora.updater`, named **Silora Updater**.
 It checks Silora when opened, with the inherited short check cooldown, and every 12 hours in the

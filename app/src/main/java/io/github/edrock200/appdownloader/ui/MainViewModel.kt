@@ -69,6 +69,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val ops = app.controller.ops
     val selfUpdate = app.controller.selfUpdate
     val updatingAll = app.controller.updatingAll
+    val installRestore = app.controller.installRestore
+    fun hasSavedApk(record: io.github.edrock200.appdownloader.data.InstallRecord) = app.controller.hasSavedApk(record)
+    fun prepareInstallRestore(record: io.github.edrock200.appdownloader.data.InstallRecord) = app.controller.prepareInstallRestore(record)
+    suspend fun confirmInstallRestore(expectedInstalledVersionCode: Long?) = app.controller.confirmInstallRestore(expectedInstalledVersionCode)
+    fun installAfterRestoreUninstall() = app.controller.installAfterRestoreUninstall()
+    fun cancelInstallRestore() = app.controller.cancelInstallRestore()
+    fun refreshInstallRestore() = app.controller.refreshInstallRestore()
+    fun restoreError(message: String) = app.controller.restoreError(message)
 
     /** Whether the "updates are waiting" prompt was already shown since the app was opened. */
     var waitingPromptShown = false

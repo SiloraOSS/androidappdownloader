@@ -69,6 +69,8 @@ internal fun SiloraDashboard(
     onOpen: () -> Unit,
     onCancel: () -> Unit,
     onSettings: () -> Unit,
+    onHistory: () -> Unit,
+    restoring: Boolean,
     onInstallPermission: () -> Unit,
     onNotifications: () -> Unit,
     modifier: Modifier = Modifier,
@@ -80,26 +82,25 @@ internal fun SiloraDashboard(
     ))) {
         val wide = maxWidth >= 840.dp
         val compact = isTv && wide
+        val separateHeaderActions = maxWidth < 480.dp
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = if (isTv) 48.dp else 20.dp, vertical = if (isTv) 20.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(if (compact) 18.dp else 24.dp),
         ) {
-            Row(
-                Modifier.widthIn(max = 1120.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Image(painterResource(R.drawable.silora_mark), contentDescription = null, Modifier.size(38.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Silora", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
-                    Text("UPDATER", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            Column(Modifier.widthIn(max = 1120.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Image(painterResource(R.drawable.silora_mark), contentDescription = null, Modifier.size(38.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Silora", style = MaterialTheme.typography.titleLarge, color = colors.onBackground)
+                        Text("UPDATER", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                    }
+                    if (!separateHeaderActions) SiloraHeaderActions(onHistory, onSettings)
                 }
-                OutlinedButton(onClick = onSettings, modifier = Modifier.focusHighlight()) {
-                    Icon(Icons.Default.Settings, contentDescription = null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Settings")
+                if (separateHeaderActions) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    SiloraHeaderActions(onHistory, onSettings)
                 }
             }
             if (!compact) Column(
@@ -111,7 +112,7 @@ internal fun SiloraDashboard(
             }
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
-                    onInstall, onCheck, onOpen, onCancel, cardModifier)
+                    onInstall, onCheck, onOpen, onCancel, restoring, cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
@@ -136,15 +137,28 @@ internal fun SiloraDashboard(
 }
 
 @Composable
+private fun SiloraHeaderActions(onHistory: () -> Unit, onSettings: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(onClick = onHistory, modifier = Modifier.focusHighlight()) { Text("Past installs") }
+        OutlinedButton(onClick = onSettings, modifier = Modifier.focusHighlight()) {
+            Icon(Icons.Default.Settings, contentDescription = null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Settings")
+        }
+    }
+}
+
+@Composable
 private fun SiloraUpdateCard(
     item: EntryUi?, checking: Boolean, updatingAutomatically: Boolean,
     usingShizuku: Boolean, shizuku: ShizukuState, canOpen: Boolean, isTv: Boolean, compact: Boolean,
     onInstall: () -> Unit, onCheck: () -> Unit, onOpen: () -> Unit, onCancel: () -> Unit,
+    restoring: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val op = item?.op
-    val busy = op != null && op !is OpState.Failed
+    val busy = restoring || (op != null && op !is OpState.Failed)
     val known = item?.entry?.latestVersionCode != null && item.entry.lastCheckError == null
     val error = op is OpState.Failed || item?.entry?.lastCheckError != null
     val current = item != null && item.installed != null && known && !item.hasUpdate && !item.waiting
@@ -174,6 +188,7 @@ private fun SiloraUpdateCard(
                 }
                 if (!compact) HorizontalDivider(color = colors.outlineVariant)
                 val status = when {
+                    restoring -> "A past install is being restored. Follow the restore dialog to continue."
                     op == OpState.Resolving -> "Checking the latest Silora build…"
                     op is OpState.Downloading -> op.progress?.let { "Downloading Silora… ${(it * 100).toInt()}%" } ?: "Downloading Silora…"
                     op == OpState.Installing -> if (usingShizuku) "Installing Silora with Shizuku…" else "Confirm the install when your device asks."
@@ -236,7 +251,7 @@ private fun SiloraUpdateCard(
                     if (canOpen && !openPrimary) {
                         TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth().focusHighlight(scaleUp = false)) { Text("Open Silora") }
                     }
-                    if (busy && !updatingAutomatically) {
+                    if (busy && !updatingAutomatically && !restoring) {
                         TextButton(onClick = onCancel, modifier = Modifier.focusHighlight()) {
                             Text(if (op == OpState.Installing) "Dismiss" else "Cancel download")
                         }
