@@ -1,5 +1,6 @@
 package io.github.edrock200.appdownloader.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,6 +11,8 @@ data class SettingsState(
     val githubToken: String = "",
     /** 0 disables background update checks. */
     val checkIntervalHours: Int = 12,
+    /** Download and attempt to install newer Silora builds at each background check. */
+    val autoInstallUpdates: Boolean = false,
     val deleteApkAfterInstall: Boolean = true,
     /** Check this app's own GitHub releases when it is opened. */
     val checkSelfUpdates: Boolean = true,
@@ -47,15 +50,49 @@ enum class Repeat(val label: String, val hours: Int = 0) {
 
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    private val _state = MutableStateFlow(read())
+    private val _state = MutableStateFlow(UpdatePreferences.normalize(read()))
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     val current: SettingsState get() = _state.value
 
     fun update(newState: SettingsState) {
+        val normalized = UpdatePreferences.normalize(newState)
+        write(normalized)
+        _state.value = normalized
+    }
+
+    val notificationPermissionAsked: Boolean get() = prefs.getBoolean("notification_permission_asked", false)
+    val notificationPromptSeen: Boolean get() = prefs.getBoolean("notification_prompt_seen", false)
+
+    fun markNotificationPromptSeen() {
+        prefs.edit().putBoolean("notification_prompt_seen", true).apply()
+    }
+
+    fun markNotificationPermissionAsked() {
+        prefs.edit().putBoolean("notification_permission_asked", true).apply()
+    }
+
+    /** Null means no request; false means setup only; true requires an explicit Continue to install. */
+    val pendingInstallAfterPermission: Boolean?
+        get() = if (prefs.contains(KEY_INSTALL_PERMISSION_REQUEST)) {
+            prefs.getBoolean(KEY_INSTALL_PERMISSION_REQUEST, false)
+        } else null
+
+    @SuppressLint("ApplySharedPref")
+    fun saveInstallPermissionRequest(installAfterPermission: Boolean?) {
+        val editor = prefs.edit()
+        if (installAfterPermission == null) editor.remove(KEY_INSTALL_PERMISSION_REQUEST)
+        else editor.putBoolean(KEY_INSTALL_PERMISSION_REQUEST, installAfterPermission)
+        // Android can kill us as soon as install access changes, even without onSaveInstanceState.
+        // Finish this small write before handing off to Settings (or starting the confirmed install).
+        editor.commit()
+    }
+
+    private fun write(newState: SettingsState) {
         prefs.edit()
             .putString(KEY_TOKEN, newState.githubToken.trim())
             .putInt(KEY_INTERVAL, newState.checkIntervalHours)
+            .putBoolean(KEY_AUTO_INSTALL, newState.autoInstallUpdates)
             .putBoolean(KEY_DELETE, newState.deleteApkAfterInstall)
             .putBoolean(KEY_SELF_UPDATE, newState.checkSelfUpdates)
             .putLong(KEY_SCHEDULE_AT, newState.scheduleAt)
@@ -63,12 +100,12 @@ class Settings(context: Context) {
             .putBoolean(KEY_ONLY_IF_CHANGED, newState.updateOnlyIfChanged)
             .putString(KEY_THEME_MODE, newState.themeMode.name)
             .apply()
-        _state.value = newState.copy(githubToken = newState.githubToken.trim())
     }
 
     private fun read() = SettingsState(
         githubToken = prefs.getString(KEY_TOKEN, "") ?: "",
         checkIntervalHours = prefs.getInt(KEY_INTERVAL, 12),
+        autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, false),
         deleteApkAfterInstall = prefs.getBoolean(KEY_DELETE, true),
         checkSelfUpdates = prefs.getBoolean(KEY_SELF_UPDATE, true),
         scheduleAt = prefs.getLong(KEY_SCHEDULE_AT, 0),
@@ -83,6 +120,8 @@ class Settings(context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_TOKEN = "github_token"
         private const val KEY_INTERVAL = "check_interval_hours"
+        private const val KEY_AUTO_INSTALL = "auto_install_updates"
+        private const val KEY_INSTALL_PERMISSION_REQUEST = "install_permission_request"
         private const val KEY_DELETE = "delete_after_install"
         private const val KEY_SELF_UPDATE = "check_self_updates"
         private const val KEY_SCHEDULE_AT = "schedule_at"

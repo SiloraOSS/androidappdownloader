@@ -8,6 +8,7 @@ import io.github.edrock200.appdownloader.data.History
 import io.github.edrock200.appdownloader.data.InstallRecord
 import io.github.edrock200.appdownloader.data.EntryRepository
 import io.github.edrock200.appdownloader.data.Settings
+import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.data.VersionUtils
 import io.github.edrock200.appdownloader.install.ApkDownloader
@@ -132,7 +133,7 @@ class AppController(
     // ---------------------------------------------------------------- install
 
     fun downloadAndInstall(entryId: String) {
-        if (jobs[entryId]?.isActive == true) return
+        if (jobs[entryId]?.isActive == true || isBusy(entryId)) return
         jobs[entryId] = scope.launch { runInstall(entryId) }
     }
 
@@ -157,6 +158,14 @@ class AppController(
 
             val info = downloadAndInspect(entryId, url)
 
+            if (entry.id == Silora.ID) {
+                if (info.packageName != Silora.PACKAGE ||
+                    info.info.versionCode != entry.latestVersionCode
+                ) {
+                    withContext(Dispatchers.IO) { info.file.delete() }
+                    throw IOException("The download does not match the published Silora build. Please try again later.")
+                }
+            }
             val previousPackage = entry.packageName
             if (previousPackage != null && previousPackage != info.packageName) {
                 _messages.tryEmit("Note: ${entry.name} now provides ${info.packageName} (was $previousPackage)")
@@ -198,8 +207,18 @@ class AppController(
     }
 
     private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false) {
-        setOp(opId, OpState.Installing)
         val previous = InstalledApps.get(context, apk.packageName)
+        if (opId == Silora.ID) {
+            require(apk.packageName == Silora.PACKAGE) { "This is not a Silora APK" }
+            if (previous != null && apk.info.versionCode <= previous.versionCode) {
+                withContext(Dispatchers.IO) { apk.file.delete() }
+                repository.update(opId) { it.clearReady() }
+                setOp(opId, null)
+                _messages.tryEmit("Silora is already up to date")
+                return
+            }
+        }
+        setOp(opId, OpState.Installing)
         withContext(Dispatchers.IO) {
             ApkInstaller.install(
                 context, apk.file, apk.info, opId, releaseTag, background,
@@ -281,6 +300,7 @@ class AppController(
                 withContext(Dispatchers.IO) { File(filePath).delete() }
             }
             val entry = repository.get(entryId)
+            Notifications.cancelUpdates(context)
             _messages.tryEmit("Installed ${entry?.name ?: "app"}")
             if (background && entry != null) {
                 Notifications.showAutoUpdated(context, entry, InstalledApps.get(context, entry.packageName)?.versionName)
@@ -308,7 +328,7 @@ class AppController(
         scope.launch { repository.update(entryId) { it.clearReady() } }
         val reason = when (status) {
             PackageInstaller.STATUS_FAILURE_CONFLICT ->
-                "Conflicts with the installed app (it may be signed with a different key — uninstall it first)"
+                "The installed app conflicts with this update, possibly because it uses a different signing key. Contact support for help."
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "This app is not compatible with your device"
             PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough storage space"
             PackageInstaller.STATUS_FAILURE_BLOCKED -> "Installation was blocked"
@@ -334,6 +354,8 @@ class AppController(
                     latestAssetName = match.asset.name,
                     latestAssetUrl = match.asset.downloadUrl,
                     latestPublishedAt = match.release.publishedAt,
+                    latestVersionCode = match.versionCode,
+                    latestVersionName = match.versionName,
                     lastCheckedAt = now,
                     lastCheckError = null,
                 )
@@ -397,6 +419,10 @@ class AppController(
     suspend fun syncHistoryWithDevice() {
         for (entry in repository.entries.value) {
             if (isBusy(entry.id)) continue
+            if (entry.readyFile != null && (!File(entry.readyFile).exists() ||
+                    (InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= (entry.readyVersionCode ?: Long.MAX_VALUE))) {
+                discardReady(entry)
+            }
             val pkg = entry.packageName ?: continue
             val installed = InstalledApps.get(context, pkg) ?: continue
             val updated = History.syncWithDevice(entry.history, installed.versionName, installed.versionCode, installed.installedAt)
@@ -538,11 +564,10 @@ class AppController(
      * Checks every installed app that has auto-update switched on and installs newer versions.
      * [interactive] runs happen while the user is watching, so Android's confirmation prompts
      * are shown one at a time. Scheduled runs install silently where Android allows it
-     * (Android 12+, apps this app installed) and otherwise leave the download waiting.
+     * (Android 12+, for apps this updater installed).
      */
-    suspend fun updateSelected(interactive: Boolean): UpdateRunSummary {
-        if (_updatingAll.value) return UpdateRunSummary()
-        _updatingAll.value = true
+    suspend fun updateSelected(interactive: Boolean, shouldContinue: () -> Boolean = { true }): UpdateRunSummary {
+        if (!_updatingAll.compareAndSet(false, true)) return UpdateRunSummary()
         val updated = mutableListOf<String>()
         val waiting = mutableListOf<String>()
         val installing = mutableListOf<String>()
@@ -553,7 +578,7 @@ class AppController(
                 it.autoUpdate && InstalledApps.get(context, it.packageName) != null
             }
             for (candidate in candidates) {
-                if (isBusy(candidate.id)) continue
+                if (isBusy(candidate.id) || !shouldContinue()) continue
                 try {
                     val apk = prepareUpdate(candidate.id)
                     val entry = repository.get(candidate.id) ?: continue
@@ -562,6 +587,7 @@ class AppController(
                         continue
                     }
                     when {
+                        !shouldContinue() -> waiting += entry.name
                         interactive -> {
                             install(entry.id, apk, entry.readyTag)
                             awaitInstallResult(entry.id)
@@ -572,9 +598,12 @@ class AppController(
                                 else -> waiting += entry.name // Prompt was cancelled; the download stays.
                             }
                         }
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                            io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(context) -> {
                             install(entry.id, apk, entry.readyTag, background = true)
-                            installing += entry.name // The receiver reports success or "waiting".
+                            if ((InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= apk.info.versionCode)
+                                updated += entry.name
+                            else installing += entry.name // Standard installer results can arrive later.
                         }
                         else -> waiting += entry.name
                     }
@@ -637,7 +666,7 @@ class AppController(
         }
         val apk = downloadAndInspect(entryId, url)
         setOp(entryId, null)
-        if (apk.packageName != entry.packageName) {
+        if (apk.packageName != entry.packageName || (entry.id == Silora.ID && apk.info.versionCode != entry.latestVersionCode)) {
             withContext(Dispatchers.IO) { apk.file.delete() }
             throw IOException("The download is a different app (${apk.packageName}); update it manually")
         }
@@ -710,7 +739,7 @@ class AppController(
 
     /** Returns true when the check completed (whether or not an update was found). */
     private suspend fun checkSelfUpdate(manual: Boolean): Boolean {
-        // Custom updater builds must not offer an upstream App Downloader APK.
+        // This fork must never offer an upstream App Downloader APK over the locked updater.
         if (BuildConfig.UPDATE_REPO.isBlank()) return true
         val current = BuildConfig.VERSION_NAME
         try {

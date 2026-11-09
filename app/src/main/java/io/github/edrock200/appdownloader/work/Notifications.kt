@@ -33,12 +33,17 @@ object Notifications {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    fun showUpdates(context: Context, updates: List<AppEntry>) {
-        if (updates.isEmpty()) return
+    fun areEnabled(context: Context): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) return
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_UPDATES)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    fun showUpdates(context: Context, updates: List<AppEntry>): Boolean {
+        if (updates.isEmpty() || !areEnabled(context)) return false
 
         val open = PendingIntent.getActivity(
             context,
@@ -57,7 +62,12 @@ object Notifications {
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(ID_UPDATES, notification)
+        return try {
+            NotificationManagerCompat.from(context).notify(ID_UPDATES, notification)
+            true
+        } catch (_: SecurityException) {
+            false // Permission can be revoked between the check and posting.
+        }
     }
 
     /** "Updates downloaded, open the app to finish installing" (or clears it when [entries] is empty). */
@@ -67,7 +77,7 @@ object Notifications {
             return
         }
         val title = if (entries.size == 1) "Update ready: ${entries[0].name}" else "${entries.size} updates ready to install"
-        val text = "Open App Downloader to finish installing" +
+        val text = "Open Silora Updater to finish installing" +
             if (entries.size > 1) ": " + entries.joinToString(", ") { it.name } else ""
         post(context, ID_WAITING, title, text)
     }
@@ -78,20 +88,20 @@ object Notifications {
     }
 
     fun showUpdateFailures(context: Context, names: List<String>) {
-        if (names.isEmpty()) return
+        if (names.isEmpty()) {
+            NotificationManagerCompat.from(context).cancel(ID_FAILED)
+            return
+        }
         post(
             context,
             ID_FAILED,
             "Scheduled update: ${names.size} app${if (names.size > 1) "s" else ""} could not be updated",
-            names.joinToString(", ") + ". Open App Downloader for details.",
+            names.joinToString(", ") + ". Open Silora Updater for details.",
         )
     }
 
     private fun post(context: Context, id: Int, title: String, text: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!areEnabled(context)) return
         val open = PendingIntent.getActivity(
             context,
             id,
@@ -106,7 +116,11 @@ object Notifications {
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(id, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (_: SecurityException) {
+            // A permission change must not crash an install-result callback.
+        }
     }
 
     fun cancelUpdates(context: Context) {

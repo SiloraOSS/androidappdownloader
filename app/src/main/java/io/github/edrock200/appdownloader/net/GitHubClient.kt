@@ -1,6 +1,7 @@
 package io.github.edrock200.appdownloader.net
 
 import io.github.edrock200.appdownloader.data.AppEntry
+import io.github.edrock200.appdownloader.data.Silora
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -35,7 +36,12 @@ data class RepoRef(val owner: String, val repo: String) {
     val url get() = "https://github.com/$slug"
 }
 
-data class ReleaseMatch(val release: GhRelease, val asset: GhAsset)
+data class ReleaseMatch(
+    val release: GhRelease,
+    val asset: GhAsset,
+    val versionCode: Long? = null,
+    val versionName: String? = null,
+)
 
 object GitHubClient {
 
@@ -66,7 +72,19 @@ object GitHubClient {
     ): ReleaseMatch = withContext(Dispatchers.IO) {
         val ref = parseRepo("github.com/" + entry.source)
             ?: throw IOException("Invalid repository: ${entry.source}")
-        pickRelease(fetchReleases(ref, token), entry, supportedAbis)
+        val match = pickRelease(fetchReleases(ref, token), entry, supportedAbis)
+        if (entry.id != Silora.ID) return@withContext match
+        val metadata = match.release.assets.firstOrNull { it.name == "build-info.json" }
+            ?: throw IOException("This Silora release is missing its build information. Try again later.")
+        Http.execute(Request.Builder().url(metadata.downloadUrl).build()).use { response ->
+            if (!response.isSuccessful) throw IOException("Couldn't check the Silora build (HTTP ${response.code}). Try again.")
+            val body = response.body ?: throw IOException("Silora build information is empty")
+            val info = Silora.parseBuildInfo(body.string(), match.release.tagName, match.asset.name)
+            match.copy(
+                versionCode = info.versionCode(match.asset.name == Silora.assetName(true)),
+                versionName = info.versionName,
+            )
+        }
     }
 
     /** Chooses the newest eligible release with a suitable asset, or throws explaining why none fits. */
@@ -108,7 +126,7 @@ object GitHubClient {
                     throw IOException("GitHub token is invalid or expired")
                 (response.code == 403 || response.code == 429) &&
                     (response.header("X-RateLimit-Remaining") == "0" || body.contains("rate limit", true)) ->
-                    throw IOException("GitHub rate limit reached. Add a personal access token in Settings.")
+                    throw IOException("GitHub is temporarily limiting update checks. Please try again in an hour.")
                 response.code == 403 -> throw IOException("GitHub denied access to ${ref.slug} (HTTP 403)")
                 else -> throw IOException("GitHub returned HTTP ${response.code}")
             }

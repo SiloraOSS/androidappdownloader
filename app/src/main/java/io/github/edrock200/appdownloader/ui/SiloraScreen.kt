@@ -1,0 +1,196 @@
+package io.github.edrock200.appdownloader.ui
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.work.Notifications
+
+/** A fixed, remote-friendly front door: no source setup, editor, removal or restore controls. */
+@Composable
+fun SiloraScreen(vm: MainViewModel) {
+    val context = LocalContext.current
+    val items by vm.items.collectAsStateWithLifecycle()
+    val checking by vm.checking.collectAsStateWithLifecycle()
+    val updatingAutomatically by vm.updatingAll.collectAsStateWithLifecycle()
+    val item = items.firstOrNull { it.entry.id == Silora.ID }
+    val snackbar = remember { SnackbarHostState() }
+    val pendingInstallAfterPermission = remember { vm.pendingInstallAfterPermission }
+    var permissionPrompt by rememberSaveable { mutableStateOf(pendingInstallAfterPermission != null) }
+    var allowed by remember { mutableStateOf(SystemActions.canInstallPackages(context)) }
+    val isTv = rememberIsTv()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    var showWaiting by rememberSaveable { mutableStateOf(false) }
+    var installAfterPermission by rememberSaveable { mutableStateOf(pendingInstallAfterPermission ?: true) }
+    var showNotificationIntro by rememberSaveable { mutableStateOf(false) }
+    var notificationsEnabled by remember { mutableStateOf(Notifications.areEnabled(context)) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationsEnabled = Notifications.areEnabled(context)
+        if (granted) vm.notificationPermissionGranted()
+    }
+    fun notificationSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !vm.notificationPermissionAsked) {
+            vm.markNotificationPermissionAsked()
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (!SystemActions.openNotificationSettings(context)) {
+            vm.message("Open your device's Settings to enable notifications for Silora Updater.")
+        }
+    }
+    LaunchedEffect(settings.checkIntervalHours) {
+        if (settings.checkIntervalHours > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !notificationsEnabled && !vm.notificationPromptSeen) {
+            vm.markNotificationPromptSeen()
+            showNotificationIntro = true
+        }
+    }
+    LaunchedEffect(item?.waiting, item?.op) {
+        if (item?.waiting == true && item.op == null && !vm.waitingPromptShown) {
+            vm.waitingPromptShown = true
+            showWaiting = true
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        allowed = SystemActions.canInstallPackages(context)
+        val enabled = Notifications.areEnabled(context)
+        if (enabled && !notificationsEnabled) vm.notificationPermissionGranted()
+        notificationsEnabled = enabled
+    }
+    LaunchedEffect(Unit) {
+        vm.messages.collect { snackbar.showSnackbar(it) }
+    }
+
+    fun install() {
+        if (SystemActions.canInstallPackages(context)) vm.install(Silora.ID)
+        else {
+            installAfterPermission = true
+            permissionPrompt = true
+        }
+    }
+
+    fun dismissInstallPermission() {
+        vm.saveInstallPermissionRequest(null)
+        permissionPrompt = false
+    }
+
+    fun openInstallSettings() {
+        vm.saveInstallPermissionRequest(installAfterPermission)
+        if (!SystemActions.openInstallPermissionSettings(context)) {
+            vm.saveInstallPermissionRequest(null)
+            vm.message("Open your device's Settings and allow installs for Silora Updater.")
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        SiloraDashboard(
+            item = item, checking = checking, updatingAutomatically = updatingAutomatically,
+            settings = settings, installAllowed = allowed,
+            notificationsEnabled = notificationsEnabled,
+            canOpen = item?.installed != null && SystemActions.canLaunch(context, Silora.PACKAGE),
+            isTv = isTv,
+            onInstall = ::install, onCheck = vm::checkAll,
+            onOpen = { SystemActions.launchApp(context, Silora.PACKAGE) },
+            onCancel = { vm.clearOp(Silora.ID) },
+            onSettings = { showSettings = true },
+            onInstallPermission = { installAfterPermission = false; permissionPrompt = true },
+            onNotifications = ::notificationSettings,
+            modifier = Modifier.padding(padding),
+        )
+    }
+
+    if (permissionPrompt) {
+        AlertDialog(
+            onDismissRequest = ::dismissInstallPermission,
+            title = { Text("Allow Silora installs") },
+            text = { Text("Enable installs for Silora Updater, then return here and choose Continue.\n\n" + Device.installPermissionHelp(context)) },
+            confirmButton = {
+                TextButton(modifier = Modifier.focusHighlight(), onClick = {
+                    if (SystemActions.canInstallPackages(context)) {
+                        dismissInstallPermission()
+                        if (installAfterPermission) install()
+                    } else openInstallSettings()
+                }) { Text(if (allowed) "Continue" else "Open settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = ::dismissInstallPermission, modifier = Modifier.focusHighlight()) { Text("Cancel") }
+            },
+        )
+    }
+    if (showSettings) {
+        SiloraSettingsDialog(
+            current = settings, installAllowed = allowed, notificationsEnabled = notificationsEnabled,
+            onInterval = vm::setCheckInterval,
+            onAutomaticInstall = { enabled ->
+                vm.setAutomaticInstallation(enabled)
+                if (enabled && !allowed) {
+                    showSettings = false
+                    installAfterPermission = false
+                    permissionPrompt = true
+                }
+            },
+            onDeleteAfterInstall = vm::setDeleteAfterInstall, onTheme = vm::setTheme,
+            onInstallPermission = {
+                showSettings = false
+                installAfterPermission = false
+                permissionPrompt = true
+                openInstallSettings()
+            },
+            onNotifications = ::notificationSettings,
+            onHistory = { showSettings = false; showHistory = true },
+            onDismiss = { showSettings = false },
+        )
+    }
+    if (showHistory) item?.entry?.let { HistoryDialog(it, onDismiss = { showHistory = false }) }
+    if (showWaiting && item?.waiting == true) {
+        AlertDialog(onDismissRequest = { showWaiting = false }, title = { Text("Silora update ready") },
+            text = { Text("A background update was downloaded and needs your confirmation to install.") },
+            confirmButton = { TextButton(onClick = { showWaiting = false; install() }, modifier = Modifier.focusHighlight()) { Text("Install update") } },
+            dismissButton = { TextButton(onClick = { showWaiting = false }, modifier = Modifier.focusHighlight()) { Text("Later") } },
+        )
+    }
+    if (showNotificationIntro && !showWaiting && !permissionPrompt) {
+        AlertDialog(onDismissRequest = { showNotificationIntro = false }, title = { Text("Get Silora update alerts") },
+            text = { Text("Allow notifications so Silora Updater can tell you when an update is available or needs your confirmation.") },
+            confirmButton = { TextButton(onClick = { showNotificationIntro = false; notificationSettings() }, modifier = Modifier.focusHighlight()) { Text("Enable notifications") } },
+            dismissButton = { TextButton(onClick = { showNotificationIntro = false }, modifier = Modifier.focusHighlight()) { Text("Not now") } },
+        )
+    }
+
+}

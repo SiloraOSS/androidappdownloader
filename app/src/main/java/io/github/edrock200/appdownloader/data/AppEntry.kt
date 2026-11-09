@@ -36,6 +36,9 @@ data class AppEntry(
     val latestAssetName: String? = null,
     val latestAssetUrl: String? = null,
     val latestPublishedAt: String? = null,
+    /** Android version from Silora's release metadata, independent of its date-based tag. */
+    val latestVersionCode: Long? = null,
+    val latestVersionName: String? = null,
     val lastCheckedAt: Long? = null,
     val lastCheckError: String? = null,
     /** Release tag the app last installed for this entry. */

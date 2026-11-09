@@ -25,6 +25,15 @@ object SystemActions {
         return intents.any { start(context, it) }
     }
 
+    fun openNotificationSettings(context: Context): Boolean {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+        }
+        return start(context, intent)
+    }
+
     fun launchApp(context: Context, packageName: String): Boolean {
         val pm = context.packageManager
         val intent = pm.getLaunchIntentForPackage(packageName)

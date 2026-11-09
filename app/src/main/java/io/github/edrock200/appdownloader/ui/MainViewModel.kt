@@ -284,11 +284,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveSettings(state: SettingsState) {
         val old = app.settings.current
         app.settings.update(state)
-        if (old.checkIntervalHours != state.checkIntervalHours) {
-            UpdateScheduler.schedule(app, state.checkIntervalHours)
+        val saved = app.settings.current
+        if (old.checkIntervalHours != saved.checkIntervalHours) {
+            UpdateScheduler.schedule(app, saved.checkIntervalHours)
         }
         if (old.scheduleAt != state.scheduleAt || old.scheduleRepeat != state.scheduleRepeat) {
             AutoUpdateScheduler.apply(app, state)
         }
+    }
+
+    fun setCheckInterval(hours: Int) = saveSettings(app.settings.current.copy(checkIntervalHours = hours))
+    fun setAutomaticInstallation(enabled: Boolean) = saveSettings(app.settings.current.copy(autoInstallUpdates = enabled))
+    fun setTheme(mode: io.github.edrock200.appdownloader.data.ThemeMode) = saveSettings(app.settings.current.copy(themeMode = mode))
+    fun setDeleteAfterInstall(enabled: Boolean) = saveSettings(app.settings.current.copy(deleteApkAfterInstall = enabled))
+    val notificationPermissionAsked get() = app.settings.notificationPermissionAsked
+    val notificationPromptSeen get() = app.settings.notificationPromptSeen
+    fun markNotificationPromptSeen() = app.settings.markNotificationPromptSeen()
+    fun markNotificationPermissionAsked() = app.settings.markNotificationPermissionAsked()
+    val pendingInstallAfterPermission get() = app.settings.pendingInstallAfterPermission
+    fun saveInstallPermissionRequest(installAfterPermission: Boolean?) =
+        app.settings.saveInstallPermissionRequest(installAfterPermission)
+
+    fun notificationPermissionGranted() = viewModelScope.launch {
+        // Earlier versions marked notifications as sent even if permission was missing.
+        app.repository.update(io.github.edrock200.appdownloader.data.Silora.ID) { it.copy(notifiedTag = null) }
     }
 }

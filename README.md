@@ -1,9 +1,49 @@
 # Silora Updater
 
-A Silora-branded fork of App Downloader, installed separately as **Silora Updater**
-(`org.silora.updater`). The launcher, TV banner, notifications and light/dark palette use
-Silora's purple prism branding. The updater icon has an upward-arrow badge to distinguish
-it from the player. Upstream App Downloader self-updates are disabled for this custom app.
+A dedicated installer and updater for **Silora**, based on App Downloader by edrock200.
+
+- Install this updater, open it, and choose **Install Silora** or **Update Silora**.
+- Silora is built in permanently. Users cannot edit its source, remove it, add other apps,
+  uninstall Silora from the updater, or replace the configuration through a backup.
+- Fire TV / Android TV / Google TV get `silora-tv.apk`; phones and tablets get `silora-phone.apk`.
+- Downloads stable releases from `SiloraOSS/silora-android`. Existing `org.silora.app` installs
+  are recognized immediately, including copies installed through Downloader or Obtainium.
+- Update checks use the release's `build-info.json` Android version code, including the phone/TV
+  multiplier. The APK's package and version must match before installation. The same or an older
+  version is never installed over a newer copy.
+- Uses Android's standard installer and normal install-permission/confirmation requirements.
+  Updates preserve Silora's data when the installed copy uses the same signing key. An incompatible
+  signature must be resolved separately; the updater does not uninstall Silora or erase its data.
+
+The updater installs separately as `org.silora.updater`, named **Silora Updater**.
+It checks Silora when opened, with the inherited short check cooldown, and every 12 hours in the
+background by default. **Settings** offers checks every 3, 6, 12, or 24 hours, or only when
+opened/manually. **Install updates automatically** is a separate, persistent switch (off by
+default); when on, each background check downloads newer builds and attempts installation.
+Choosing manual-only checks also turns automatic installation off. First install is always manual.
+Android's power/network restrictions can delay background work. If Android requires confirmation,
+the download stays ready and the app offers **Install update** when opened, even while offline.
+
+Android 13+ users get an explanation and notification permission request. If notifications are
+denied or disabled, the home screen and Settings show an **Enable notifications** action.
+Update alerts are only marked delivered after they are posted successfully. Some TV launchers do
+not surface notifications; pending updates remain visible in the updater. Settings also offers
+appearance, download cleanup, install permission setup, and update history.
+
+Some Android TV devices restart the updater when **Allow from this source** changes. The
+updater can be recreated behind the Settings panel without saved screen state. Press **Back**
+to return to permission setup, then choose **Continue**; installing still requires that action.
+
+No GitHub account or token is required.
+Upstream App Downloader self-updates are disabled so they cannot replace this custom app.
+
+### Silora appearance
+
+The updater uses Silora's purple split-prism mark, violet accents, and charcoal dark surfaces,
+with a matching light theme. **Settings → Appearance** keeps the existing Follow system,
+Light, and Dark choices; wallpaper colors do not override the Silora palette. The home screen
+shows release status, installed/latest versions, and update preferences, with side-by-side
+panels on wide screens. Launcher icons, the TV banner, and notifications use the Silora mark.
 
 ## Build this fork
 

@@ -5,7 +5,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 12+: lets updates of apps we installed skip the confirmation prompt. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
@@ -20,10 +19,10 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <!-- Google's QR scanner screen is portrait-only; that must not make a portrait screen required (TVs). -->
     <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
-    <!-- Needed to read the installed version of arbitrary apps the user adds. -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+    <!-- Only Silora needs package visibility in this dedicated updater. -->
+    <queries>
+        <package android:name="org.silora.app" />
+    </queries>
 
     <!-- Runs on phones, tablets, Fire TV and Android TV. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -40,26 +39,25 @@
         android:theme="@style/Theme.AppDownloader"
         android:usesCleartextTraffic="true">
 
+        <!-- TV permission panels can leave this activity paused without saving its state.
+             Allow Android to recreate the dashboard when changing install access kills us;
+             durable settings, entries and the pending permission request restore the flow. -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:stateNotNeeded="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-            <!-- Share a link from another app to add it. -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
         </activity>
 
         <receiver
             android:name=".install.InstallResultReceiver"
             android:exported="false" />
+
     </application>
 </manifest>

@@ -11,14 +11,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
+import io.github.edrock200.appdownloader.ui.Device
 
 /** Stores the saved entries as a JSON file in the app's private storage. */
 class EntryRepository(context: Context) {
 
     private val file = File(context.filesDir, "entries.json")
+    private val isTv = Device.isTv(context)
     private val mutex = Mutex()
     private val serializer = ListSerializer(AppEntry.serializer())
-    private val _entries = MutableStateFlow(load())
+    private val _entries = MutableStateFlow(Silora.entries(load(), isTv))
 
     val entries: StateFlow<List<AppEntry>> = _entries.asStateFlow()
 
@@ -35,7 +37,7 @@ class EntryRepository(context: Context) {
     suspend fun replaceAll(entries: List<AppEntry>) = mutate { entries }
 
     private suspend fun mutate(block: (List<AppEntry>) -> List<AppEntry>) = mutex.withLock {
-        val updated = block(_entries.value)
+        val updated = Silora.entries(block(_entries.value), isTv, get(Silora.ID))
         _entries.value = updated
         withContext(Dispatchers.IO) { save(updated) }
     }

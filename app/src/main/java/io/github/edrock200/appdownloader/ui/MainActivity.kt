@@ -1,6 +1,5 @@
 package io.github.edrock200.appdownloader.ui
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -22,7 +21,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) handleIntent(intent)
         setContent {
             val settings by (application as App).settings.state.collectAsStateWithLifecycle()
             val dark = when (settings.themeMode) {
@@ -37,21 +35,15 @@ class MainActivity : ComponentActivity() {
                 )
             }
             AppTheme(dark = dark) {
-                MainScreen(viewModel)
+                SiloraScreen(viewModel)
             }
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleIntent(intent)
     }
 
     override fun onStart() {
         super.onStart()
         // Runs both on a fresh start and when the app is brought back from the background,
         // which is how TVs usually "open" an app that is already running.
-        viewModel.checkSelfUpdateOnLaunch()
         viewModel.checkAllOnLaunch()
     }
 
@@ -61,14 +53,4 @@ class MainActivity : ComponentActivity() {
         viewModel.refreshInstalled()
     }
 
-    private fun handleIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND) {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
-            if (!text.isNullOrBlank()) {
-                // Pull the first URL out of shared text such as "Check this out: https://..."
-                val url = Regex("https?://\\S+").find(text)?.value ?: text
-                viewModel.sharedText.value = url
-            }
-        }
-    }
 }

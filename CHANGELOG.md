@@ -6,12 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Returns to install-permission setup on Android TV when Android restarts the updater after
+  changing install access. Remembers whether you were installing Silora or only setting up
+  permission, and still waits for Continue before starting an install.
+- Restored Settings for check intervals, automatic installation, notifications, install permissions,
+  appearance, downloaded-APK cleanup, and update history. Checks default to every 12 hours;
+  automatic installation is opt-in and follows the selected check interval.
+- Requests notification permission on Android 13+ and provides a recovery action when alerts
+  are disabled. Failed notification delivery no longer suppresses future update alerts.
+- Automatic updates retain a downloaded build when system confirmation or install permission is
+  required. Opening the updater offers to finish it, including when the network is unavailable.
+- Disabling background checks also disables automatic installation. Downloaded APKs are validated
+  against the published version on the automatic path as well as manual installs.
+
 ### Changed
-- Rebranded as Silora Updater with its own `org.silora.updater` identity, purple prism launcher
-  and notification icons, an updater-arrow badge, TV banner, and violet light/dark themes.
-- Disabled upstream App Downloader self-updates for this custom app.
-- `./build.sh` validates and signs `dist/SiloraUpdater.apk` with the existing external Silora key.
-  The release workflow uses the new APK name and no longer posts Discord announcements.
+- Added a small upward-arrow upload badge to the updater's launcher icon so it is easy
+  to distinguish from the Silora player while retaining the same prism branding.
+- Silora branding throughout: split-prism launcher and notification icons, a named TV banner,
+  violet light/dark themes, clearer release status and version details, and a responsive
+  update dashboard with visible remote focus. Appearance still follows the saved theme choice.
+- Dedicated Silora Updater with one permanent Silora entry and no source setup, editing,
+  removal, uninstall, or backup/restore controls. Selects the phone or TV APK automatically.
+- Recognizes existing `org.silora.app` installs and compares the published Android version code
+  instead of date-based release tags. Prevents reinstalling the same or an older build.
+- Uses its own `org.silora.updater` identity. Upstream App Downloader self-updates are disabled.
+- `./build.sh` builds, checks, and verifies a release APK using the existing Silora signing key
+  from `../silora-signing`, then saves `dist/SiloraUpdater.apk` and its SHA-256 checksum.
 
 ## [1.7.0] - 2026-11-06
 
