@@ -17,7 +17,7 @@ permissions:
 
 env:
   # Stable link that always serves the newest release (keep the asset name fixed).
-  LATEST_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/SiloraUpdater.apk
+  LATEST_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/SiloraUpdater-tv.apk
 
 jobs:
   build:
@@ -87,15 +87,18 @@ jobs:
         run: |
           mkdir -p dist
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk dist/SiloraUpdater.apk
+            cp app/build/outputs/apk/release/app-release.apk dist/SiloraUpdater-tv.apk
           else
-            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/SiloraUpdater-unsigned.apk
+            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/SiloraUpdater-tv-unsigned.apk
           fi
+          (cd dist && sha256sum *.apk > SHA256SUMS)
 
       - uses: actions/upload-artifact@v4
         with:
           name: SiloraUpdater-apks
-          path: dist/*.apk
+          path: |
+            dist/*.apk
+            dist/SHA256SUMS
 
       - name: Write release notes
         if: env.IS_RELEASE == 'true'
@@ -107,9 +110,8 @@ jobs:
             cat "$RUNNER_TEMP/notes.md"
             echo
             echo "## How to install"
-            echo "Works on Android phones, tablets, Fire TV and Android TV."
+            echo "This release is for Android TV / Google TV. Phone and tablet use is untested and is not part of this release."
             if [ -n "$AFTV_CODE" ]; then
-              echo "- **Phone or tablet:** open https://aftv.news/$AFTV_CODE in your browser and install the download"
               echo "- **TV:** in the Downloader app, enter code **$AFTV_CODE**"
             fi
             echo "- **Direct download (always the latest version):** $LATEST_APK_URL"
@@ -123,7 +125,9 @@ jobs:
         with:
           tag_name: v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
-          name: Silora Updater ${{ env.APP_VERSION_NAME }}
+          name: Silora Updater ${{ env.APP_VERSION_NAME }} — Android TV
           body_path: ${{ runner.temp }}/release-body.md
-          files: dist/SiloraUpdater.apk
+          files: |
+            dist/SiloraUpdater-tv.apk
+            dist/SHA256SUMS
           make_latest: true

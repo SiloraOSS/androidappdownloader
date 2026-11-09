@@ -2,6 +2,22 @@
 
 A dedicated installer and updater for **Silora**, based on App Downloader by edrock200.
 
+## Download for Android TV
+
+- **[Download the latest Android TV APK](https://github.com/SiloraOSS/androidappdownloader/releases/latest/download/SiloraUpdater-tv.apk)**
+- [Latest release and notes](https://github.com/SiloraOSS/androidappdownloader/releases/latest)
+- [All releases](https://github.com/SiloraOSS/androidappdownloader/releases)
+
+The current release is for **Android TV / Google TV**. Phone and tablet use has not been
+tested and is not part of this release. These links always point to the latest release;
+the TV asset name stays `SiloraUpdater-tv.apk` across versions.
+
+Download the APK on your TV (for example, using Downloader), allow installation from that
+source when Android asks, and install **Silora Updater**. Open it and choose **Install Silora**
+or **Update Silora**. No Downloader short code has been assigned for this fork.
+
+## How it works
+
 - Install this updater, open it, and choose **Install Silora** or **Update Silora**.
 - Silora is built in permanently. Users cannot edit its source, remove it, add other apps,
   or replace the configuration through a backup.
@@ -120,9 +136,20 @@ Gradle's local default is used. Use a higher version for future updater releases
 For CI or direct Gradle builds, supply `SIGNING_KEYSTORE_FILE`, `SIGNING_KEYSTORE_PASSWORD`,
 `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`. Release builds never fall back to a debug key.
 
-The inherited release workflow now produces `SiloraUpdater.apk`. Publishing it and assigning a
-Downloader code are separate distribution steps. The upstream Downloader code and download links
-in the historical documentation below install the original App Downloader, not this fork.
+### Publish an Android TV release
+
+For a local release, build with `./build.sh --version X.Y.Z`, publish the verified
+`dist/SiloraUpdater.apk` as **`SiloraUpdater-tv.apk`**, and include a `SHA256SUMS` file using that
+asset name. Keep this name unchanged so the permanent download link above continues working.
+This is the shared APK distributed for TV; it does not enforce a TV-only installation restriction.
+Phone and tablet releases remain deferred until tested.
+
+The GitHub Actions release workflow uses the same TV asset name and includes checksums. It
+requires the four `SIGNING_*` repository secrets described above; local publishing uses the
+existing external signing directory. Add versioned notes to `CHANGELOG.md` before publishing.
+
+The upstream Downloader code and download links in the historical documentation below install
+the original App Downloader, not this fork.
 
 ---
 

@@ -6,7 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-08
+
+First Silora Updater release, distributed for Android TV / Google TV. Phone and tablet use
+remains untested and is not included in this release. Older changelog sections describe the
+upstream App Downloader history rather than this fork's release sequence.
+
 ### Added
+- Permanent latest-release and Android TV APK links in the README, with a fixed
+  `SiloraUpdater-tv.apk` release asset name and SHA-256 checksums.
 - Past installs beside Settings lists recorded builds and restores a saved APK or that exact
   GitHub release on demand, without scanning or polling release history. APKs are prepared and
   checked before an explicit uninstall/reinstall confirmation warning that local Silora data,
