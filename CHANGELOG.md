@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-11-09
+
 ### Added
 - First-open welcome walks through the existing install-permission setup and optional update
   notifications. Granted permissions are skipped, setup progress survives Android restarts,
