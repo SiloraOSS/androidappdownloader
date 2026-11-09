@@ -6,9 +6,11 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.github.edrock200.appdownloader.data.Schedule
 import io.github.edrock200.appdownloader.data.SettingsState
+import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.work.UpdateScheduler
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -26,8 +28,13 @@ class UpdateSchedulerAndroidTest {
         UpdateScheduler.schedule(context, state, keep).result.get(10, TimeUnit.SECONDS)
     }
 
+    @Before fun initializeManager() {
+        try { WorkManager.getInstance(context) } catch (_: IllegalStateException) {
+            WorkManager.initialize(context, Configuration.Builder().build())
+        }
+    }
+
     @Test fun customTimeSurvivesStartupAndCanBeChangedReplacedOrCancelled() {
-        WorkManager.initialize(context, Configuration.Builder().build())
         val state = SettingsState(checkIntervalHours = 24, checkDaily = true, checkHour = 21)
         val expected = Schedule.nextDailyCheck(21, System.currentTimeMillis())
         apply(state)
@@ -45,6 +52,22 @@ class UpdateSchedulerAndroidTest {
         assertEquals(daily.id, interval.id)
         assertTrue(interval.nextScheduleTimeMillis < System.currentTimeMillis() + 16 * 60_000L)
         apply(SettingsState(checkIntervalHours = 0))
+        assertTrue(manager.getWorkInfosForUniqueWork("github-update-check").get(10, TimeUnit.SECONDS)
+            .all { it.state == WorkInfo.State.CANCELLED })
+    }
+
+    @Test fun replacementRecreatesMissingMonitoringFromSavedSettingsAndRespectsManualOnly() {
+        val settings = Settings(context)
+        settings.update(SettingsState(checkIntervalHours = 24, checkDaily = true, checkHour = 19))
+        apply(settings.current)
+        manager.cancelUniqueWork("github-update-check").result.get(10, TimeUnit.SECONDS)
+        // The replacement receiver uses this same schedule call after a new process reads prefs.
+        apply(Settings(context).current)
+        assertEquals(Schedule.nextDailyCheck(19, System.currentTimeMillis()), active().nextScheduleTimeMillis)
+        assertEquals(1, manager.getWorkInfosForUniqueWork("github-update-check").get(10, TimeUnit.SECONDS)
+            .count { !it.state.isFinished })
+        settings.update(settings.current.copy(checkIntervalHours = 0))
+        apply(Settings(context).current)
         assertTrue(manager.getWorkInfosForUniqueWork("github-update-check").get(10, TimeUnit.SECONDS)
             .all { it.state == WorkInfo.State.CANCELLED })
     }

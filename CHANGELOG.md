@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Silora Updater now checks its own GitHub releases alongside Silora. The existing automatic
+  installation setting and Standard Android / Shizuku installer choice apply to both apps.
+  If confirmation is needed, the downloaded updater stays ready to install, including offline.
+- Background checks resume after the updater replaces itself, without reopening the app.
+  Saved schedules and settings survive, and completed self-updates clear their pending download.
+- Settings includes a manual updater check. Self-updates accept only the dedicated updater APK
+  with the expected package and a newer Android version matching its release.
+
 ## [1.0.3] - 2026-11-09
 
 ### Fixed

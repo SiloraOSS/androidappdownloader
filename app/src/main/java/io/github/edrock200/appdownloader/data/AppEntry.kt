@@ -33,6 +33,7 @@ data class AppEntry(
     val latestTag: String? = null,
     val latestReleaseName: String? = null,
     val latestReleaseUrl: String? = null,
+    val latestReleaseNotes: String? = null,
     val latestAssetName: String? = null,
     val latestAssetUrl: String? = null,
     val latestPublishedAt: String? = null,

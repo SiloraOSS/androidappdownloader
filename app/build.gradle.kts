@@ -7,7 +7,7 @@ plugins {
 
 // The release workflow sets APP_VERSION_NAME from the git tag (v1.2.3 -> 1.2.3).
 // versionCode is derived from it, so it always increases: 1.2.3 -> 10203.
-val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.0.3"
+val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.0.4"
 val appVersionCode: Int = appVersionName.split('.').map { it.toInt() }.let { (major, minor, patch) ->
     require(minor < 100 && patch < 100) { "minor and patch must be below 100" }
     major * 10_000 + minor * 100 + patch
@@ -26,7 +26,7 @@ android {
         testInstrumentationRunner = "io.github.edrock200.appdownloader.ShizukuDeviceCheck"
 
         // Repository the app checks for its own updates.
-        buildConfigField("String", "UPDATE_REPO", "\"\"")
+        buildConfigField("String", "UPDATE_REPO", "\"SiloraOSS/androidappdownloader\"")
     }
 
     // Stable release signing is supplied externally; never distribute a debug-signed release.

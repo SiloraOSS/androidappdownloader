@@ -2,6 +2,7 @@ package io.github.edrock200.appdownloader.net
 
 import io.github.edrock200.appdownloader.data.AppEntry
 import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.data.SiloraUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -96,6 +97,10 @@ object GitHubClient {
         val ref = parseRepo("github.com/" + entry.source)
             ?: throw IOException("Invalid repository: ${entry.source}")
         val match = pickRelease(fetchReleases(ref, token), entry, supportedAbis)
+        if (entry.id == SiloraUpdater.ID) return@withContext match.copy(
+            versionCode = SiloraUpdater.versionCode(match.release.tagName),
+            versionName = match.release.tagName.removePrefix("v"),
+        )
         if (entry.id != Silora.ID) return@withContext match
         val metadata = match.release.assets.firstOrNull { it.name == "build-info.json" }
             ?: throw IOException("This Silora release is missing its build information. Try again later.")

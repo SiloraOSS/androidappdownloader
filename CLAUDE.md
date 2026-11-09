@@ -9,6 +9,18 @@ APK sources and installs them. Sources are direct URLs, aftv.news short codes, o
 repositories (whose releases are monitored for updates). Runs on phones, tablets, Fire TV and
 Android TV.
 
+## Silora Updater fork
+
+The active app is Silora Updater (`org.silora.updater`). Use `./build.sh` for the checked,
+signed release workflow (release tests, lint, signing verification), and see the README's fork
+sections. The upstream reference below describes the inherited generic UI, which is not active.
+Self-updates now use `BuildConfig.UPDATE_REPO` (`SiloraOSS/androidappdownloader`) and the exact
+`SiloraUpdater-tv.apk` asset. `SelfUpdateStore` saves the updater's `AppEntry` separately from
+Silora's fixed repository/history; managed-entry helpers share checking, staged downloads,
+version validation and installers. Background automatic runs process the player before the updater.
+`UpdateScheduleReceiver` handles `MY_PACKAGE_REPLACED` to initialize WorkManager and restore
+monitoring without reopening an activity. See `docs/self-update-testing.md` for the real-device test.
+
 ## Commands
 
 ```sh
@@ -109,13 +121,13 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
   merges or replaces via `Backup.restoreApps` (keeping ids of matching entries), `repository.replaceAll`,
   optionally `saveSettings(Backup.restoreSettings(...))` (re-applies both schedulers), then `checkAllNow`.
   Bump `BackupFile.version` (and teach `Backup.parse`) for incompatible format changes.
-- **Self-update:** `MainActivity.onStart` (every time the app comes to the foreground — TVs resume
-  the singleTask activity instead of recreating it) → `controller.checkSelfUpdateOnLaunch()`
-  (every launch while the *checkSelfUpdates* tick box is on; skipped only while an update is already
-  offered/installing or a check is running — see `SelfUpdatePolicy`; failures retry 3× at 10 s) looks up `BuildConfig.UPDATE_REPO`'s releases
-  for an `AppDownloader*.apk` asset and compares the tag with `BuildConfig.VERSION_NAME`. A newer one
-  sets `controller.selfUpdate`, shown by `SelfUpdateDialog`; installing it reuses the download/install
-  pipeline under the op id `AppController.SELF_UPDATE_ID` and refuses APKs with another package name.
+- **Self-update (Silora fork):** launch/manual/background checks include a fixed updater entry from
+  `SelfUpdateStore`, using `BuildConfig.UPDATE_REPO` and exactly `SiloraUpdater-tv.apk`. The entry
+  uses the release tag's Gradle-compatible version code; APK package/code are validated before
+  installing. The automatic-install switch and selected installer apply to both apps. Self-updates
+  run last because replacement kills the process. The new package's `MY_PACKAGE_REPLACED` receiver
+  initializes WorkManager and restores the saved schedule without opening an activity. The separate
+  durable self-update state supports offline pending installs and lost success callbacks.
 - **Releases:** running the workflow manually with input `version: X.Y.Z` (or pushing tag `vX.Y.Z`)
   sets `APP_VERSION_NAME` (versionCode =
   X*10000 + Y*100 + Z, computed in `app/build.gradle.kts`), signs with the `SIGNING_*` secrets,

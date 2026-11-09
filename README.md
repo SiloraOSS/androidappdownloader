@@ -57,13 +57,13 @@ Android can clear cached APKs when storage is low. New history records also keep
 fingerprint to reject replaced files, even when their package and version still match.
 
 The updater installs separately as `org.silora.updater`, named **Silora Updater**.
-It checks Silora when opened, with the inherited short check cooldown, and every 12 hours in the
+It checks both Silora and Silora Updater when opened, with a short check cooldown, and every 12 hours in the
 background by default. **Settings** offers checks every 3, 6, 12, or 24 hours, only when
 opened/manually, or **Custom** for a daily check at a chosen hour. Selecting Custom reveals
 **Daily check time** with −/+ hour controls that work with a TV remote. Times use the device's
 local time zone and 12/24-hour display preference; the home screen shows the saved daily time.
 Late checks do not shift the following day's chosen hour.
-**Install updates automatically** is a separate, persistent switch (off by default); when on, each background check downloads newer builds and attempts installation.
+**Install updates automatically** is a separate, persistent switch (off by default); when on, each background check downloads newer builds of Silora and Silora Updater and attempts installation using the selected installer. Silora is handled first because updating the updater closes its process.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
 Android's power/network restrictions can delay background work. If Android requires confirmation
 or the selected Shizuku connection is unavailable, the download stays ready and the app offers **Install update** when opened, even while offline.
@@ -79,7 +79,20 @@ updater can be recreated behind the Settings panel without saved screen state. P
 to return to permission setup, then choose **Continue**; installing still requires that action.
 
 No GitHub account or token is required.
-Upstream App Downloader self-updates are disabled so they cannot replace this custom app.
+Self-updates use stable releases from `SiloraOSS/androidappdownloader`, selecting only
+`SiloraUpdater-tv.apk`. The package name and Android version code must match the release before
+installation; the same or an older updater is never installed. Android also enforces its signing key.
+The existing automatic-install switch applies to both apps. With it off, the updater offers its own
+update for manual installation; Settings also has **Check for updater update**.
+
+Installing an updater update closes the old process. Android delivers `MY_PACKAGE_REPLACED` to
+the new package, which initializes WorkManager and restores the saved background-check schedule
+without opening the app window. WorkManager recovers interrupted jobs from its persistent database.
+Pending self-updates survive process death and remain installable offline when confirmation is
+needed. Successful replacements clear stale pending downloads even if the old install callback
+never arrives. Manual-only checking stays manual-only after replacement.
+
+See [self-update device testing](docs/self-update-testing.md) for the signed upgrade/recovery check.
 
 ### Silora appearance
 

@@ -1,5 +1,8 @@
 package io.github.edrock200.appdownloader
 
+import io.github.edrock200.appdownloader.data.SiloraUpdater
+import io.github.edrock200.appdownloader.net.GitHubClient
+import io.github.edrock200.appdownloader.net.GhRelease
 import io.github.edrock200.appdownloader.net.AssetSelector
 import io.github.edrock200.appdownloader.net.GhAsset
 import io.github.edrock200.appdownloader.ui.plainText
@@ -10,29 +13,22 @@ class SelfUpdateTest {
 
     @Test
     fun selfUpdateFilterPicksReleaseApk() {
-        val assets = listOf("AppDownloader-debug.apk", "AppDownloader.apk", "notes.txt").map { GhAsset(it, "https://x/$it") }
-        // Same filter as AppController.checkSelfUpdate; the release only ships AppDownloader.apk.
-        val picked = AssetSelector.select(assets.filter { it.name != "AppDownloader-debug.apk" }, "^AppDownloader.*\\.apk$", listOf("arm64-v8a"))
-        assertEquals("AppDownloader.apk", picked?.name)
+        val assets = listOf("AppDownloader.apk", "SiloraUpdater-device-check.apk", "SiloraUpdater-tv.apk", "SHA256SUMS")
+            .map { GhAsset(it, "https://x/$it") }
+        val picked = AssetSelector.select(assets, SiloraUpdater.entry().assetFilter, listOf("arm64-v8a"))
+        assertEquals("SiloraUpdater-tv.apk", picked?.name)
+        val stable = GhRelease("v1.2.0", assets = assets)
+        val match = GitHubClient.pickRelease(listOf(stable.copy(tagName = "v1.3.0", prerelease = true),
+            stable.copy(tagName = "v1.2.1", draft = true), stable), SiloraUpdater.entry(), listOf("arm64-v8a"))
+        assertEquals("v1.2.0", match.release.tagName)
     }
 
-    @Test
-    fun versionCodeOrderingMatchesTags() {
-        // Mirrors the versionCode formula in app/build.gradle.kts.
-        fun code(v: String) = v.split('.').map { it.toInt() }.let { (a, b, c) -> a * 10_000 + b * 100 + c }
-        assertEquals(10100, code("1.1.0"))
-        assert(code("1.10.0") > code("1.9.99"))
-        assert(code("2.0.0") > code("1.99.99"))
-    }
-
-    @Test
-    fun autoCheckRunsOnEveryLaunch() {
-        fun check(enabled: Boolean = true, offered: Boolean = false, running: Boolean = false) =
-            SelfUpdatePolicy.shouldAutoCheck(enabled, offered, running)
-        assertEquals(true, check()) // Every launch while the tick box is on.
-        assertEquals(false, check(enabled = false)) // Tick box off.
-        assertEquals(false, check(offered = true)) // Prompt already showing / update installing.
-        assertEquals(false, check(running = true)) // A check (or its retries) is in progress.
+    @Test fun updaterVersionsMatchGradleAndRejectAmbiguousTags() {
+        assertEquals(10100L, SiloraUpdater.versionCode("v1.1.0"))
+        org.junit.Assert.assertTrue(SiloraUpdater.versionCode("1.10.0") > SiloraUpdater.versionCode("1.9.99"))
+        for (tag in listOf("latest", "v1.0", "v1.0.4-beta", "1.100.1", "999999999999.0.0", "0.0.0")) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) { SiloraUpdater.versionCode(tag) }
+        }
     }
 
     @Test

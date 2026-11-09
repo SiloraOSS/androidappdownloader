@@ -59,7 +59,7 @@ object ShizukuInstaller {
                     }
                 } else listOf(file)
                 files.forEach { descriptors += ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_ONLY) }
-                service.install(descriptors.toTypedArray(), Array(files.size) { "$it.apk" }, files.map { it.length() }.toLongArray(), result)
+                service.install(info.packageName, descriptors.toTypedArray(), Array(files.size) { "$it.apk" }, files.map { it.length() }.toLongArray(), result)
             }
         } finally {
             descriptors.forEach { runCatching { it.close() } }

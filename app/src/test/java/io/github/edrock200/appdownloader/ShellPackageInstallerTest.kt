@@ -30,6 +30,12 @@ class ShellPackageInstallerTest {
         assertFalse(calls.any { it.first() == "install-abandon" })
     }
 
+    @Test fun selfUpdateTargetsTheUpdaterPackageRatherThanThePlayer() {
+        ShellPackageInstaller(runner()).install(listOf(source()), "org.silora.updater", 0)
+        assertEquals(listOf("install-create", "-r", "--user", "0", "--pkg", "org.silora.updater", "-S", "3"), calls.first())
+        assertEquals(listOf("install-commit", "12345"), calls.last())
+    }
+
     @Test fun partialWriteFailureAbandonsTheWholeSession() {
         val error = assertThrows(IOException::class.java) {
             ShellPackageInstaller(runner("install-write")).install(listOf(source()), "org.silora.app", 0)

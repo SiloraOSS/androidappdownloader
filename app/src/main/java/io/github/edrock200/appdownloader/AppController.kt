@@ -11,6 +11,8 @@ import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.InstallPolicy
 import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.data.SiloraUpdater
+import io.github.edrock200.appdownloader.data.SelfUpdateStore
 import io.github.edrock200.appdownloader.data.SourceType
 import io.github.edrock200.appdownloader.data.VersionUtils
 import io.github.edrock200.appdownloader.install.ApkDownloader
@@ -82,22 +84,13 @@ object UpdateCheckPolicy {
         !checkRunning && now - lastCheckAt >= MIN_INTERVAL_MS
 }
 
-/** When the automatic "is there a newer App Downloader?" check should run (pure, for tests). */
-object SelfUpdatePolicy {
-    const val ATTEMPTS = 3
-    const val RETRY_DELAY_MS = 10_000L
-
-    /** Every launch, unless turned off or an update prompt / install / check is already in progress. */
-    fun shouldAutoCheck(enabled: Boolean, updateOffered: Boolean, checkRunning: Boolean): Boolean =
-        enabled && !updateOffered && !checkRunning
-}
-
-/** A newer release of App Downloader itself. */
+/** A newer release of Silora Updater itself. */
 data class SelfUpdate(
     val version: String,
     val notes: String?,
     val assetUrl: String,
     val releaseUrl: String?,
+    val downloaded: Boolean = false,
 )
 
 /**
@@ -127,9 +120,37 @@ class AppController(
 
     companion object {
         /** Operation id used for updating this app itself. */
-        const val SELF_UPDATE_ID = "self-update"
+        const val SELF_UPDATE_ID = SiloraUpdater.ID
     }
     private val apkDir get() = File(context.cacheDir, "apks")
+
+    private val selfStore = SelfUpdateStore(context)
+    private var dismissedSelfTag: String? = null
+    private val _selfUpdate = MutableStateFlow(selfOffer(selfStore.current))
+    val selfUpdate: StateFlow<SelfUpdate?> = _selfUpdate.asStateFlow()
+
+    private fun managedEntries() = repository.entries.value + selfStore.current
+    private fun managedEntry(id: String) = if (id == SELF_UPDATE_ID) selfStore.current else repository.get(id)
+    private suspend fun updateManagedEntry(id: String, transform: (AppEntry) -> AppEntry) {
+        if (id == SELF_UPDATE_ID) {
+            val entry = selfStore.update(transform)
+            _selfUpdate.value = selfOffer(entry).takeUnless { entry.latestTag == dismissedSelfTag }
+        } else repository.update(id, transform)
+    }
+
+    private fun selfOffer(entry: AppEntry): SelfUpdate? {
+        if (!VersionUtils.hasUpdate(entry, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong())) return null
+        return SelfUpdate(entry.latestTag!!.removePrefix("v"), entry.latestReleaseNotes,
+            entry.latestAssetUrl!!, entry.latestReleaseUrl,
+            downloaded = entry.readyFile?.let { File(it).isFile } == true)
+    }
+
+    /** Only acknowledge alerts actually delivered, including the updater's separate saved state. */
+    suspend fun markUpdatesNotified(entries: List<AppEntry>) {
+        entries.forEach { entry -> updateManagedEntry(entry.id) {
+            it.copy(notifiedTag = entry.latestTag, notifiedChangeKey = entry.remoteFingerprint?.key)
+        } }
+    }
 
     private fun setOp(id: String, state: OpState?) = _ops.update { if (state == null) it - id else it + (id to state) }
 
@@ -148,7 +169,7 @@ class AppController(
     /** Downloads/copies and validates the complete APK BEFORE offering a destructive restore. */
     fun prepareInstallRestore(record: InstallRecord) {
         if (isBusy(Silora.ID) || _updatingAll.value || restoreJob?.isActive == true) return
-        if (repository.get(Silora.ID)?.history?.contains(record) != true) return
+        if (managedEntry(Silora.ID)?.history?.contains(record) != true) return
         _installRestore.value = InstallRestoreState(preparing = true)
         restoreJob = scope.launch {
             try {
@@ -188,7 +209,7 @@ class AppController(
         _installRestore.update { it.copy(preparing = true) }
         restoreJob = scope.launch {
             previousJob?.join()
-            repository.update(Silora.ID) { entry ->
+            updateManagedEntry(Silora.ID) { entry ->
                 if (entry.readyFile == restoreStore.apk.absolutePath) entry.clearReady() else entry
             }
             withContext(Dispatchers.IO) { restoreStore.clear() }
@@ -291,12 +312,19 @@ class AppController(
 
     fun downloadAndInstall(entryId: String) {
         if (jobs[entryId]?.isActive == true || isBusy(entryId)) return
+        setOp(entryId, OpState.Resolving)
         jobs[entryId] = scope.launch { runInstall(entryId) }
     }
 
     private suspend fun runInstall(entryId: String) {
-        var entry = repository.get(entryId) ?: return
+        var entry = managedEntry(entryId) ?: return
         try {
+            if (entryId == SELF_UPDATE_ID) {
+                val apk = readyApk(entry) ?: prepareUpdate(entryId) ?: return
+                entry = managedEntry(entryId) ?: return
+                install(entryId, apk, entry.readyTag)
+                return
+            }
             // An update downloaded by a scheduled run is waiting: install that file.
             readyApk(entry)?.let { apk ->
                 install(entryId, apk, entry.readyTag)
@@ -327,7 +355,7 @@ class AppController(
             if (previousPackage != null && previousPackage != info.packageName) {
                 _messages.tryEmit("Note: ${entry.name} now provides ${info.packageName} (was $previousPackage)")
             }
-            repository.update(entryId) { e ->
+            updateManagedEntry(entryId) { e ->
                 val useLabel = e.autoName && info.label != null
                 e.copy(
                     packageName = info.packageName,
@@ -369,11 +397,22 @@ class AppController(
         if (restoreAttemptId != null) {
             check(previous == null) { "Silora is installed again. Confirm the uninstall and restore again before continuing." }
         }
+        if (opId == SELF_UPDATE_ID) {
+            require(apk.packageName == context.packageName && !apk.info.isSplit &&
+                apk.info.versionCode == releaseTag?.let(SiloraUpdater::versionCode)) {
+                "The download does not match the published Silora Updater build"
+            }
+            if (apk.info.versionCode <= BuildConfig.VERSION_CODE) {
+                discardReady(selfStore.current)
+                setOp(opId, null)
+                return
+            }
+        }
         if (opId == Silora.ID) {
             require(apk.packageName == Silora.PACKAGE) { "This is not a Silora APK" }
             if (previous != null && apk.info.versionCode <= previous.versionCode) {
                 withContext(Dispatchers.IO) { apk.file.delete() }
-                repository.update(opId) { it.clearReady() }
+                updateManagedEntry(opId) { it.clearReady() }
                 setOp(opId, null)
                 _messages.tryEmit("Silora is already up to date")
                 return
@@ -382,14 +421,14 @@ class AppController(
         setOp(opId, OpState.Installing)
         if (settings.current.installMethod == InstallMethod.SHIZUKU) {
             // Keep manual downloads ready as well, so a lost Binder never forces a re-download.
-            repository.update(opId) { it.copy(readyFile = apk.file.absolutePath,
+            updateManagedEntry(opId) { it.copy(readyFile = apk.file.absolutePath,
                 readyVersionName = apk.info.versionName, readyVersionCode = apk.info.versionCode, readyTag = releaseTag) }
             val callback = ApkInstaller.resultCallback(context, 0, apk.file, apk.info, opId, releaseTag,
                 background, previous?.versionName, previous?.versionCode, viaShizuku = true,
                 restoreAttemptId = restoreAttemptId)
             ShizukuInstaller.install(context, apk.file, apk.info, callback.intentSender)
             val complete = withTimeoutOrNull(15_000) { _ops.first { it[opId] != OpState.Installing } }
-                ?: throw IOException("Installation finished but no result was received. Reopen the updater to check Silora.")
+                ?: throw IOException("Installation finished but no result was received. Reopen the updater to check the installed version.")
             (complete[opId] as? OpState.Failed)?.let { throw IOException(it.message) }
             return
         }
@@ -417,15 +456,18 @@ class AppController(
             } else {
                 null
             }
-            if (apk != null && apk.info.versionCode > installedCode) apk else null.also { file.delete() }
+            if (apk != null && apk.info.versionCode > installedCode &&
+                (entry.id != SELF_UPDATE_ID || (apk.packageName == context.packageName && !apk.info.isSplit &&
+                    apk.info.versionCode == entry.readyTag?.let(SiloraUpdater::versionCode)))) apk
+            else null.also { file.delete() }
         }
-        if (apk == null) repository.update(entry.id) { it.clearReady() }
+        if (apk == null) updateManagedEntry(entry.id) { it.clearReady() }
         return apk
     }
 
     private suspend fun discardReady(entry: AppEntry) {
         entry.readyFile?.let { path -> withContext(Dispatchers.IO) { File(path).delete() } }
-        repository.update(entry.id) { it.clearReady() }
+        updateManagedEntry(entry.id) { it.clearReady() }
     }
 
     private fun AppEntry.clearReady() =
@@ -455,7 +497,16 @@ class AppController(
     ) {
         if (!acceptsInstallResult(entryId, restoreAttemptId)) return
         scope.launch {
-            val nowInstalled = InstalledApps.get(context, repository.get(entryId)?.packageName)
+            if (entryId == SELF_UPDATE_ID) {
+                updateManagedEntry(entryId) { it.clearReady() }
+                if (settings.current.deleteApkAfterInstall && filePath != null)
+                    withContext(Dispatchers.IO) { File(filePath).delete() }
+                _selfUpdate.value = null
+                setOp(entryId, null)
+                Notifications.showWaitingUpdates(context, waitingUpdates())
+                return@launch
+            }
+            val nowInstalled = InstalledApps.get(context, managedEntry(entryId)?.packageName)
             val restored = _installRestore.value.pending?.takeIf {
                 entryId == Silora.ID && it.installing && filePath == restoreStore.apk.absolutePath
             }
@@ -484,7 +535,7 @@ class AppController(
                 apkPath = artifact?.first,
                 apkSha256 = artifact?.second,
             )
-            repository.update(entryId) { e ->
+            updateManagedEntry(entryId) { e ->
                 val installedFp = e.pendingFingerprint
                 e.clearReady().copy(
                     history = History.recordInstall(e.history, record),
@@ -507,7 +558,7 @@ class AppController(
                 withContext(Dispatchers.IO) { File(filePath).delete() }
             }
             setOp(entryId, null)
-            val entry = repository.get(entryId)
+            val entry = managedEntry(entryId)
             Notifications.cancelUpdates(context)
             _messages.tryEmit(if (restored != null) "Restored Silora. Automatic installation is now off."
                 else "Installed ${entry?.name ?: "app"}")
@@ -525,7 +576,7 @@ class AppController(
     }
 
     /** Entries with a downloaded update waiting to be installed. */
-    fun waitingUpdates(): List<AppEntry> = repository.entries.value.filter { it.readyFile != null && !isBusy(it.id) }
+    fun waitingUpdates(): List<AppEntry> = managedEntries().filter { it.readyFile != null && !isBusy(it.id) }
 
     fun onInstallFailed(entryId: String, status: Int, message: String?, keepDownload: Boolean = false,
         restoreAttemptId: String? = null) {
@@ -543,7 +594,7 @@ class AppController(
             return
         }
         // Don't keep offering a download that Android refused to install.
-        if (!keepDownload) scope.launch { repository.update(entryId) { it.clearReady() } }
+        if (!keepDownload) scope.launch { updateManagedEntry(entryId) { it.clearReady() } }
         val reason = when (status) {
             PackageInstaller.STATUS_FAILURE_CONFLICT ->
                 "The installed app conflicts with this update, possibly because it uses a different signing key. Contact support for help."
@@ -564,11 +615,12 @@ class AppController(
         val now = System.currentTimeMillis()
         try {
             val match = GitHubClient.findLatest(entry, settings.current.githubToken, Build.SUPPORTED_ABIS.toList())
-            repository.update(entry.id) {
+            updateManagedEntry(entry.id) {
                 it.copy(
                     latestTag = match.release.tagName,
                     latestReleaseName = match.release.name,
                     latestReleaseUrl = match.release.htmlUrl,
+                    latestReleaseNotes = match.release.body?.substringBefore("## How to install")?.trim()?.ifBlank { null },
                     latestAssetName = match.asset.name,
                     latestAssetUrl = match.asset.downloadUrl,
                     latestPublishedAt = match.release.publishedAt,
@@ -581,9 +633,9 @@ class AppController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            repository.update(entry.id) { it.copy(lastCheckedAt = now, lastCheckError = e.message ?: "Check failed") }
+            updateManagedEntry(entry.id) { it.copy(lastCheckedAt = now, lastCheckError = e.message ?: "Check failed") }
         }
-        return repository.get(entry.id) ?: entry
+        return managedEntry(entry.id) ?: entry
     }
 
     /** Checks all GitHub entries sequentially. Returns entries that now have an update. */
@@ -601,20 +653,21 @@ class AppController(
             }
             val remote = RemoteProbe.fingerprint(url)
             val change = RemoteProbe.compare(entry.fingerprint, remote)
-            repository.update(entry.id) {
+            updateManagedEntry(entry.id) {
                 it.copy(remoteFingerprint = remote, remoteChange = change, remoteCheckedAt = now, lastCheckError = null)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            repository.update(entry.id) { it.copy(remoteCheckedAt = now, lastCheckError = e.message ?: "Check failed") }
+            updateManagedEntry(entry.id) { it.copy(remoteCheckedAt = now, lastCheckError = e.message ?: "Check failed") }
         }
-        return repository.get(entry.id) ?: entry
+        return managedEntry(entry.id) ?: entry
     }
 
     /** Checks GitHub releases and link changes for every entry. Returns entries that have an update. */
     suspend fun checkAll(): List<AppEntry> {
-        repository.entries.value.forEach { entry ->
+        managedEntries().forEach { entry ->
+            if (entry.id == SELF_UPDATE_ID && isBusy(SELF_UPDATE_ID)) return@forEach
             when {
                 entry.type == SourceType.GITHUB -> checkGitHub(entry)
                 // Only installed links are worth checking: there is nothing to compare otherwise.
@@ -624,7 +677,7 @@ class AppController(
         return entriesWithUpdates()
     }
 
-    fun entriesWithUpdates(): List<AppEntry> = repository.entries.value.filter { e ->
+    fun entriesWithUpdates(): List<AppEntry> = managedEntries().filter { e ->
         InstalledApps.get(context, e.packageName).let { installed ->
             VersionUtils.updateAvailable(e, installed?.versionName, installed?.versionCode)
         }
@@ -635,16 +688,17 @@ class AppController(
      * no history yet, the version currently installed). Skips apps that are being installed now.
      */
     suspend fun syncHistoryWithDevice() {
-        for (entry in repository.entries.value) {
+        for (entry in managedEntries()) {
             if (isBusy(entry.id)) continue
             if (entry.readyFile != null && (!File(entry.readyFile).exists() ||
                     (InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= (entry.readyVersionCode ?: Long.MAX_VALUE))) {
                 discardReady(entry)
             }
+            if (entry.id == SELF_UPDATE_ID) continue
             val pkg = entry.packageName ?: continue
             val installed = InstalledApps.get(context, pkg) ?: continue
             val updated = History.syncWithDevice(entry.history, installed.versionName, installed.versionCode, installed.installedAt)
-            if (updated !== entry.history) repository.update(entry.id) { it.copy(history = updated) }
+            if (updated !== entry.history) updateManagedEntry(entry.id) { it.copy(history = updated) }
         }
     }
 
@@ -664,14 +718,13 @@ class AppController(
 
     /** Checks every app for updates. [quiet] skips the "everything is up to date" message. */
     fun checkAllNow(quiet: Boolean = false) {
-        if (_checking.value) return
+        if (!_checking.compareAndSet(false, true)) return
         scope.launch {
-            _checking.value = true
             try {
                 val updates = checkAll()
                 lastFullCheckAt = System.currentTimeMillis()
                 if (quiet) return@launch
-                val errors = repository.entries.value.count { it.lastCheckError != null }
+                val errors = managedEntries().count { it.lastCheckError != null }
                 _messages.tryEmit(
                     buildString {
                         append(
@@ -692,7 +745,7 @@ class AppController(
     }
 
     fun checkOne(entryId: String) {
-        val entry = repository.get(entryId) ?: return
+        val entry = managedEntry(entryId) ?: return
         scope.launch {
             setOp(entryId, OpState.Resolving)
             val updated = if (entry.type == SourceType.GITHUB) checkGitHub(entry) else checkLink(entry)
@@ -737,12 +790,12 @@ class AppController(
             var skipped = 0
             try {
                 for (id in ids) {
-                    val entry = repository.get(id) ?: continue
+                    val entry = managedEntry(id) ?: continue
                     if (isBusy(id)) continue
                     val before = InstalledApps.get(context, entry.packageName)?.versionCode
                     runInstall(id)
                     awaitInstallResult(id)
-                    val after = InstalledApps.get(context, repository.get(id)?.packageName)?.versionCode
+                    val after = InstalledApps.get(context, managedEntry(id)?.packageName)?.versionCode
                     when {
                         _ops.value[id] is OpState.Failed -> failed++
                         after != null && after != before -> updated++
@@ -792,14 +845,19 @@ class AppController(
         val failed = mutableListOf<String>()
         var upToDate = 0
         try {
-            val candidates = repository.entries.value.filter {
+            // Finish player work first: replacing ourselves terminates this process.
+            val candidates = managedEntries().filter {
                 it.autoUpdate && InstalledApps.get(context, it.packageName) != null
             }
             for (candidate in candidates) {
+                if (candidate.id == SELF_UPDATE_ID) {
+                    if (isBusy(Silora.ID)) awaitInstallResult(Silora.ID)
+                    if (isBusy(Silora.ID) || _installRestore.value.active) continue
+                }
                 if (isBusy(candidate.id) || !shouldContinue()) continue
                 try {
                     val apk = prepareUpdate(candidate.id)
-                    val entry = repository.get(candidate.id) ?: continue
+                    val entry = managedEntry(candidate.id) ?: continue
                     if (apk == null) {
                         upToDate++
                         continue
@@ -845,7 +903,7 @@ class AppController(
      * returns it. Returns null when the installed version is already current.
      */
     private suspend fun prepareUpdate(entryId: String): DownloadedApk? {
-        var entry = repository.get(entryId) ?: return null
+        var entry = managedEntry(entryId) ?: return null
         val installed = InstalledApps.get(context, entry.packageName) ?: return null
         // Links can't be checked without downloading, so reuse a waiting download for them.
         if (entry.type != SourceType.GITHUB) readyApk(entry)?.let { return it }
@@ -874,7 +932,7 @@ class AppController(
                     } else {
                         discardReady(entry)
                     }
-                    entry = repository.get(entryId) ?: return null
+                    entry = managedEntry(entryId) ?: return null
                 }
                 if (!VersionUtils.hasUpdate(entry, installed.versionName, installed.versionCode)) {
                     setOp(entryId, null)
@@ -885,7 +943,9 @@ class AppController(
         }
         val apk = downloadAndInspect(entryId, url)
         setOp(entryId, null)
-        if (apk.packageName != entry.packageName || (entry.id == Silora.ID && apk.info.versionCode != entry.latestVersionCode)) {
+        if (apk.packageName != entry.packageName ||
+            ((entry.id == Silora.ID || entry.id == SELF_UPDATE_ID) && apk.info.versionCode != entry.latestVersionCode) ||
+            (entry.id == SELF_UPDATE_ID && apk.info.isSplit)) {
             withContext(Dispatchers.IO) { apk.file.delete() }
             throw IOException("The download is a different app (${apk.packageName}); update it manually")
         }
@@ -894,17 +954,17 @@ class AppController(
             withContext(Dispatchers.IO) { apk.file.delete() }
             if (tag == null && apk.fingerprint != null) {
                 // Nothing newer in this file: use it as the baseline for future change checks.
-                repository.update(entryId) {
+                updateManagedEntry(entryId) {
                     it.copy(fingerprint = apk.fingerprint, remoteFingerprint = apk.fingerprint, remoteChange = RemoteChange.UNCHANGED)
                 }
             }
             if (tag != null && apk.info.versionCode == installed.versionCode) {
                 // Same build under a new tag: remember it so it isn't offered again.
-                repository.update(entryId) { it.copy(installedTag = tag, installedVersionCode = installed.versionCode) }
+                updateManagedEntry(entryId) { it.copy(installedTag = tag, installedVersionCode = installed.versionCode) }
             }
             return null
         }
-        repository.update(entryId) {
+        updateManagedEntry(entryId) {
             it.copy(
                 readyFile = apk.file.absolutePath,
                 readyVersionName = apk.info.versionName,
@@ -924,95 +984,36 @@ class AppController(
 
     // ---------------------------------------------------------- self-update
 
-    private val _selfUpdate = MutableStateFlow<SelfUpdate?>(null)
-    /** A newer version of this app that the user hasn't dismissed yet. */
-    val selfUpdate: StateFlow<SelfUpdate?> = _selfUpdate.asStateFlow()
-
-    /** Called when the app is opened; checks only if the user hasn't turned it off. */
-    private var selfCheckJob: Job? = null
-
-    /**
-     * Called every time the app is opened, including when it is brought back from the background
-     * (TVs usually resume the app rather than restart it). Skipped when the tick box is off or an
-     * update prompt / install / check is already in progress. Retries a couple of times because the
-     * network is often not up yet right after a TV wakes from standby.
-     */
-    fun checkSelfUpdateOnLaunch() {
-        if (!SelfUpdatePolicy.shouldAutoCheck(
-                enabled = settings.current.checkSelfUpdates,
-                updateOffered = _selfUpdate.value != null || isBusy(SELF_UPDATE_ID),
-                checkRunning = selfCheckJob?.isActive == true,
-            )
-        ) return
-        selfCheckJob = scope.launch {
-            repeat(SelfUpdatePolicy.ATTEMPTS) { attempt ->
-                if (checkSelfUpdate(manual = false)) return@launch
-                if (attempt < SelfUpdatePolicy.ATTEMPTS - 1) delay(SelfUpdatePolicy.RETRY_DELAY_MS)
-            }
-        }
-    }
+    /** Compatibility entry point; self-checks share the player's launch cooldown and schedule. */
+    fun checkSelfUpdateOnLaunch() = checkAllOnLaunch()
 
     fun checkSelfUpdateNow() {
-        scope.launch { checkSelfUpdate(manual = true) }
-    }
-
-    /** Returns true when the check completed (whether or not an update was found). */
-    private suspend fun checkSelfUpdate(manual: Boolean): Boolean {
-        // This fork must never offer an upstream App Downloader APK over the locked updater.
-        if (BuildConfig.UPDATE_REPO.isBlank()) return true
-        val current = BuildConfig.VERSION_NAME
-        try {
-            val self = AppEntry(
-                name = "App Downloader",
-                type = SourceType.GITHUB,
-                source = BuildConfig.UPDATE_REPO,
-                assetFilter = "^AppDownloader.*\\.apk$",
-            )
-            val match = GitHubClient.findLatest(self, settings.current.githubToken, Build.SUPPORTED_ABIS.toList())
-            val latest = match.release.tagName
-            if ((VersionUtils.compare(latest, current) ?: 0) > 0) {
-                _selfUpdate.value = SelfUpdate(
-                    version = latest.removePrefix("v"),
-                    notes = match.release.body?.substringBefore("## How to install")?.trim()?.ifBlank { null },
-                    assetUrl = match.asset.downloadUrl,
-                    releaseUrl = match.release.htmlUrl,
-                )
-            } else if (manual) {
-                _messages.tryEmit("App Downloader is up to date (version $current)")
+        if (isBusy(SELF_UPDATE_ID)) return
+        dismissedSelfTag = null
+        _selfUpdate.value = selfOffer(selfStore.current)
+        scope.launch {
+            val entry = checkGitHub(selfStore.current)
+            when {
+                entry.lastCheckError != null -> _messages.tryEmit("Silora Updater: ${entry.lastCheckError}")
+                selfOffer(entry) == null -> _messages.tryEmit("Silora Updater is up to date (version ${BuildConfig.VERSION_NAME})")
             }
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (manual) _messages.tryEmit("Couldn't check for app updates: ${e.message}")
-            return false
         }
     }
 
     fun dismissSelfUpdate() {
+        // Dismiss only this launch's prompt; keep the APK and the next scheduled check.
+        if (isBusy(SELF_UPDATE_ID)) return
+        dismissedSelfTag = selfStore.current.latestTag
         _selfUpdate.value = null
         clearOp(SELF_UPDATE_ID)
     }
 
     fun installSelfUpdate() {
-        val update = _selfUpdate.value ?: return
-        if (jobs[SELF_UPDATE_ID]?.isActive == true) return
-        jobs[SELF_UPDATE_ID] = scope.launch {
-            try {
-                val apk = downloadAndInspect(SELF_UPDATE_ID, update.assetUrl)
-                if (apk.packageName != context.packageName) {
-                    throw IOException("The downloaded file is not an App Downloader update")
-                }
-                install(SELF_UPDATE_ID, apk, "v${update.version}")
-            } catch (e: CancellationException) {
-                setOp(SELF_UPDATE_ID, null)
-                throw e
-            } catch (e: Exception) {
-                setOp(SELF_UPDATE_ID, OpState.Failed(e.message ?: e.javaClass.simpleName))
-            } finally {
-                jobs.remove(SELF_UPDATE_ID)
-            }
+        if (_updatingAll.value || _installRestore.value.active || isBusy(Silora.ID)) {
+            _messages.tryEmit("Wait for the Silora install to finish, then update Silora Updater.")
+            return
         }
+        downloadAndInstall(SELF_UPDATE_ID)
     }
 
     fun message(text: String) {

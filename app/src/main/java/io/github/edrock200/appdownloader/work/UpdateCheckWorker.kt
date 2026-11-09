@@ -39,12 +39,9 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
         val updates = app.controller.checkAll()
         val fresh = UpdatePreferences.unannouncedUpdates(updates)
         if (fresh.isNotEmpty() && Notifications.showUpdates(applicationContext, fresh)) {
-            fresh.forEach { entry ->
-                app.repository.update(entry.id) {
-                    it.copy(notifiedTag = it.latestTag, notifiedChangeKey = it.remoteFingerprint?.key)
-                }
-            }
+            app.controller.markUpdatesNotified(fresh)
         }
+        android.util.Log.i("SiloraUpdater", "Background update check completed")
         return Result.success()
     }
 }

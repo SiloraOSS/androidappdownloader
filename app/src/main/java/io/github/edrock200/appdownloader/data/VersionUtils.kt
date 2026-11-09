@@ -43,7 +43,7 @@ object VersionUtils {
         val latest = entry.latestTag ?: return false
         if (entry.latestAssetUrl == null) return false
         if (installedVersionCode == null) return false // Not installed: offer "Install", not "Update".
-        if (entry.id == Silora.ID) {
+        if (entry.id == Silora.ID || entry.id == SiloraUpdater.ID) {
             return entry.latestVersionCode?.let { it > installedVersionCode } ?: false
         }
 

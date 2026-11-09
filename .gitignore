@@ -11,3 +11,5 @@ build/
 *.keystore
 /dist/
 __pycache__/
+
+.kotlin/

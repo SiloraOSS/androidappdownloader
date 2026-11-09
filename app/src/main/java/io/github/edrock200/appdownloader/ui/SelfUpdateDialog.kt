@@ -19,7 +19,7 @@ import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.OpState
 import io.github.edrock200.appdownloader.SelfUpdate
 
-/** Offers to update App Downloader itself. */
+/** Offers to update Silora Updater itself, including an offline staged update. */
 @Composable
 fun SelfUpdateDialog(
     update: SelfUpdate,
@@ -34,7 +34,7 @@ fun SelfUpdateDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "App Downloader ${update.version} is available. You have version ${BuildConfig.VERSION_NAME}.",
+                    "Silora Updater ${update.version} is available. You have version ${BuildConfig.VERSION_NAME}.",
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 update.notes?.let { notes ->
@@ -48,7 +48,8 @@ fun SelfUpdateDialog(
                 }
                 when (op) {
                     null -> Text(
-                        "The app will close once the update is installed. Just open it again afterwards.",
+                        (if (update.downloaded) "The update is downloaded and ready to install. " else "") +
+                            "The app will close during installation. Scheduled update checks resume automatically.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -77,8 +78,8 @@ fun SelfUpdateDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onLater, modifier = Modifier.focusHighlight()) {
-                Text(if (busy) "Cancel" else "Later")
+            TextButton(onClick = onLater, enabled = !busy, modifier = Modifier.focusHighlight()) {
+                Text("Later")
             }
         },
     )

@@ -57,6 +57,7 @@ fun SiloraSettingsDialog(
     onInstallPermission: () -> Unit,
     onNotifications: () -> Unit,
     onHistory: () -> Unit,
+    onCheckSelfUpdate: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -69,8 +70,8 @@ fun SiloraSettingsDialog(
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SettingsSection("Check for Silora updates")
-                Text("Checks also run when you open the updater. Background timing may vary with your device's power settings.",
+                SettingsSection("Check for Silora and updater updates")
+                Text("Checks for both Silora and Silora Updater also run when you open the updater. Background timing may vary with your device's power settings.",
                     style = MaterialTheme.typography.bodySmall)
                 Settings.INTERVAL_OPTIONS.forEach { hours ->
                     PreferenceChoice(if (hours == 0) "When opened / manual only" else "Every $hours hours",
@@ -124,9 +125,9 @@ fun SiloraSettingsDialog(
                     if (current.checkIntervalHours == 0) "Choose a background check schedule to enable automatic installation."
                     else if (current.installMethod == InstallMethod.SHIZUKU)
                         "At each background check, download newer builds and install them while Shizuku is ready. " +
-                            "Otherwise the download waits. Silora must be installed once first."
+                            "Otherwise the download waits. Includes Silora Updater itself; Silora must be installed once first."
                     else "At each background check, download newer builds and install them when Android allows it. " +
-                        "If confirmation is needed, the download waits for you. Silora must be installed once first.",
+                        "If confirmation is needed, the download waits for you. Includes Silora Updater itself; Silora must be installed once first.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 HorizontalDivider()
@@ -148,6 +149,7 @@ fun SiloraSettingsDialog(
                 PreferenceSwitch("Delete APK after installing", current.deleteApkAfterInstall, onChange = onDeleteAfterInstall)
                 Text("Downloaded updates waiting for confirmation are kept until you install them.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = onHistory, modifier = Modifier.focusHighlight()) { Text("Update history") }
+                OutlinedButton(onClick = onCheckSelfUpdate, modifier = Modifier.focusHighlight()) { Text("Check for updater update") }
                 Text("Silora Updater ${BuildConfig.VERSION_NAME} · Settings save immediately.", style = MaterialTheme.typography.bodySmall)
             }
         },

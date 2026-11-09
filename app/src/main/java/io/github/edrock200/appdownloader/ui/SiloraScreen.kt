@@ -50,6 +50,8 @@ fun SiloraScreen(vm: MainViewModel) {
     val checking by vm.checking.collectAsStateWithLifecycle()
     val updatingAutomatically by vm.updatingAll.collectAsStateWithLifecycle()
     val restore by vm.installRestore.collectAsStateWithLifecycle()
+    val selfUpdate by vm.selfUpdate.collectAsStateWithLifecycle()
+    val ops by vm.ops.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val item = items.firstOrNull { it.entry.id == Silora.ID }
     val snackbar = remember { SnackbarHostState() }
@@ -156,6 +158,20 @@ fun SiloraScreen(vm: MainViewModel) {
         )
     }
 
+    if (!showSettings && !permissionPrompt && !showShizukuHelp && !restore.active && !showNotificationIntro && !showWaiting) {
+        selfUpdate?.let { update ->
+            SelfUpdateDialog(update, ops[io.github.edrock200.appdownloader.AppController.SELF_UPDATE_ID],
+                onUpdate = {
+                    if (usingShizuku && !vm.refreshShizuku().ready) showSettings = true
+                    else if (!usingShizuku && !SystemActions.canInstallPackages(context)) {
+                        // Set up access only; return to this prompt for an explicit updater install.
+                        installAfterPermission = false
+                        permissionPrompt = true
+                    } else vm.installSelfUpdate()
+                }, onLater = vm::dismissSelfUpdate)
+        }
+    }
+
     if (permissionPrompt) {
         AlertDialog(
             onDismissRequest = ::dismissInstallPermission,
@@ -201,6 +217,7 @@ fun SiloraScreen(vm: MainViewModel) {
             },
             onNotifications = ::notificationSettings,
             onHistory = { showSettings = false; showHistory = true },
+            onCheckSelfUpdate = { showSettings = false; vm.checkSelfUpdateNow() },
             onDismiss = { showSettings = false },
         )
     }
