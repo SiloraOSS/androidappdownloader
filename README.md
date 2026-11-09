@@ -128,7 +128,7 @@ unit tests and lint, builds the release, and verifies the APK's certificate matc
 its app ID is `org.silora.updater`, and it is not debuggable. It also writes `dist/SHA256SUMS`.
 
 ```sh
-./build.sh --version 1.0.2
+./build.sh --version 1.0.3
 ./build.sh --signing-dir /path/to/silora-signing
 ```
 

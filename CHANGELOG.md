@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-09
+
 ### Fixed
 - Default TV remote focus to Check for updates when opening the dashboard, returning
   from dialogs or permission setup, and finishing an update check.
