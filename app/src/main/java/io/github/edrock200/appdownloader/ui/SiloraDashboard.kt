@@ -38,13 +38,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -86,10 +91,14 @@ internal fun SiloraDashboard(
     val colors = MaterialTheme.colorScheme
     val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
     val checkFocus = remember { FocusRequester() }
+    val primaryFocus = remember { FocusRequester() }
+    var preferPrimaryFocus by rememberSaveable { mutableStateOf(false) }
     val checkEnabled = item != null && !checking && !restoring && (item.op == null || item.op is OpState.Failed)
-    // Route fresh focus (including after closing a dialog) to the check action.
+    val primaryAvailable = item != null && (canOpen || item.installed == null || item.hasUpdate || item.waiting)
+    val preferredFocus = if (preferPrimaryFocus && primaryAvailable) primaryFocus else checkFocus
+    // Return to the selected action after the installer or a dialog closes.
     val defaultFocus = if (isTv) Modifier.focusProperties {
-        enter = { if (checkEnabled) checkFocus else FocusRequester.Default }
+        enter = { if (checkEnabled) preferredFocus else FocusRequester.Default }
     }.focusGroup() else Modifier
     BoxWithConstraints(modifier.then(defaultFocus).fillMaxSize().background(colors.background).background(Brush.verticalGradient(
         listOf(colors.primaryContainer.copy(alpha = 0.32f), colors.background, colors.background),
@@ -126,7 +135,8 @@ internal fun SiloraDashboard(
             }
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
-                    onInstall, onCheck, onOpen, onCancel, restoring, checkFocus, cardModifier)
+                    onInstall, onCheck, onOpen, onCancel, restoring, checkFocus, primaryFocus, preferredFocus,
+                    onActionFocused = { preferPrimaryFocus = it }, modifier = cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
@@ -169,6 +179,9 @@ private fun SiloraUpdateCard(
     onInstall: () -> Unit, onCheck: () -> Unit, onOpen: () -> Unit, onCancel: () -> Unit,
     restoring: Boolean,
     checkFocus: FocusRequester,
+    primaryFocus: FocusRequester,
+    preferredFocus: FocusRequester,
+    onActionFocused: (primary: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -179,10 +192,10 @@ private fun SiloraUpdateCard(
     val current = item != null && item.installed != null && known && !item.hasUpdate && !item.waiting
     val checkPrimary = !known && item?.installed != null && !item.waiting
     val checkEnabled = item != null && !busy && !checking
-    // Checking disables the button; restore focus when it is enabled again, even
-    // if the result moved the check action from the primary to the secondary slot.
+    // Both actions are disabled during work. Keep the selected action through that
+    // gap, including when Install/Update becomes Open or Check moves to another slot.
     LaunchedEffect(isTv, checkEnabled, checkPrimary) {
-        if (isTv && checkEnabled) checkFocus.requestFocus()
+        if (isTv && checkEnabled) preferredFocus.requestFocus()
     }
     Card(modifier, shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = colors.surface),
@@ -237,7 +250,9 @@ private fun SiloraUpdateCard(
                         onClick = { when { openPrimary -> onOpen(); checkPrimary -> onCheck(); else -> onInstall() } },
                         enabled = !busy && !checking && (openPrimary || checkPrimary || item.installed == null || item.hasUpdate || item.waiting),
                         modifier = actionModifier
+                            .focusRequester(primaryFocus)
                             .then(if (checkPrimary) Modifier.focusRequester(checkFocus) else Modifier)
+                            .onFocusChanged { if (it.isFocused) onActionFocused(!checkPrimary) }
                             .heightIn(min = 52.dp).focusHighlight(scaleUp = false),
                     ) {
                         Text(when {
@@ -255,7 +270,9 @@ private fun SiloraUpdateCard(
                 }
                 val secondaryAction: @Composable (Modifier) -> Unit = { actionModifier ->
                     OutlinedButton(onClick = onCheck, enabled = !busy && !checking,
-                        modifier = actionModifier.focusRequester(checkFocus).heightIn(min = 52.dp).focusHighlight(scaleUp = false)) {
+                        modifier = actionModifier.focusRequester(checkFocus)
+                            .onFocusChanged { if (it.isFocused) onActionFocused(false) }
+                            .heightIn(min = 52.dp).focusHighlight(scaleUp = false)) {
                         Icon(Icons.Default.Refresh, contentDescription = null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Check for updates")

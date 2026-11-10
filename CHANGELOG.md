@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Keep the remote selection on Install/Update Silora as it changes to Open Silora after installation.
+
 ## [1.0.4] - 2026-11-09
 
 ### Added
