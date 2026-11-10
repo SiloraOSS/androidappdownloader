@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-09
+
 ### Fixed
 - Keep the remote selection on Install/Update Silora as it changes to Open Silora after installation.
 
