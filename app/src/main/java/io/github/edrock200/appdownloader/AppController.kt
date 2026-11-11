@@ -24,6 +24,9 @@ import io.github.edrock200.appdownloader.install.InstallRestoreState
 import io.github.edrock200.appdownloader.install.InstallRestoreStore
 import io.github.edrock200.appdownloader.install.PendingInstallRestore
 import io.github.edrock200.appdownloader.install.ShizukuInstaller
+import io.github.edrock200.appdownloader.install.PlaybackInstallPolicy
+import io.github.edrock200.appdownloader.install.SiloraMediaSession
+import io.github.edrock200.appdownloader.install.SiloraPlaybackReader
 import io.github.edrock200.appdownloader.install.NotAnApkException
 import io.github.edrock200.appdownloader.net.AftvResolver
 import io.github.edrock200.appdownloader.net.GitHubClient
@@ -102,6 +105,7 @@ class AppController(
     private val repository: EntryRepository,
     private val settings: Settings,
     private val scope: CoroutineScope,
+    private val playback: SiloraPlaybackReader = SiloraMediaSession(context),
 ) {
     private val _ops = MutableStateFlow<Map<String, OpState>>(emptyMap())
     val ops: StateFlow<Map<String, OpState>> = _ops.asStateFlow()
@@ -391,8 +395,9 @@ class AppController(
         return DownloadedApk(result.file, info, result.fingerprint)
     }
 
-    private suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false,
-        restoreAttemptId: String? = null) {
+    /** False means playback deferred this automatic install; the ready APK stays on disk. */
+    internal suspend fun install(opId: String, apk: DownloadedApk, releaseTag: String?, background: Boolean = false,
+        restoreAttemptId: String? = null): Boolean {
         val previous = InstalledApps.get(context, apk.packageName)
         if (restoreAttemptId != null) {
             check(previous == null) { "Silora is installed again. Confirm the uninstall and restore again before continuing." }
@@ -405,7 +410,7 @@ class AppController(
             if (apk.info.versionCode <= BuildConfig.VERSION_CODE) {
                 discardReady(selfStore.current)
                 setOp(opId, null)
-                return
+                return true
             }
         }
         if (opId == Silora.ID) {
@@ -415,8 +420,15 @@ class AppController(
                 updateManagedEntry(opId) { it.clearReady() }
                 setOp(opId, null)
                 _messages.tryEmit("Silora is already up to date")
-                return
+                return true
             }
+        }
+        // Check after downloading and installer readiness, immediately before replacement.
+        // Both background workers use this path, as do Standard and Shizuku installs.
+        if (!PlaybackInstallPolicy.allowsInstall(apk.packageName, background, playback)) {
+            setOp(opId, null)
+            android.util.Log.i("SiloraUpdater", "Deferred automatic Silora install: playback active or unavailable; retry on next scheduled check")
+            return false
         }
         setOp(opId, OpState.Installing)
         if (settings.current.installMethod == InstallMethod.SHIZUKU) {
@@ -430,7 +442,7 @@ class AppController(
             val complete = withTimeoutOrNull(15_000) { _ops.first { it[opId] != OpState.Installing } }
                 ?: throw IOException("Installation finished but no result was received. Reopen the updater to check the installed version.")
             (complete[opId] as? OpState.Failed)?.let { throw IOException(it.message) }
-            return
+            return true
         }
         withContext(Dispatchers.IO) {
             ApkInstaller.install(
@@ -440,6 +452,7 @@ class AppController(
                 restoreAttemptId = restoreAttemptId,
             )
         }
+        return true
     }
 
     /**
@@ -473,7 +486,7 @@ class AppController(
     private fun AppEntry.clearReady() =
         copy(readyFile = null, readyVersionName = null, readyVersionCode = null, readyTag = null)
 
-    private class DownloadedApk(val file: File, val info: ApkInfo, val fingerprint: RemoteFingerprint? = null) {
+    internal class DownloadedApk(val file: File, val info: ApkInfo, val fingerprint: RemoteFingerprint? = null) {
         val packageName get() = info.packageName
         val label get() = info.label
     }
@@ -877,8 +890,9 @@ class AppController(
                         InstallPolicy.canInstallInBackground(settings.current.installMethod, Build.VERSION.SDK_INT,
                             io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(context),
                             settings.current.installMethod == InstallMethod.SHIZUKU && context.app().shizuku.awaitReady().ready) -> {
-                            install(entry.id, apk, entry.readyTag, background = true)
-                            if ((InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= apk.info.versionCode)
+                            val started = install(entry.id, apk, entry.readyTag, background = true)
+                            if (!started) waiting += entry.name
+                            else if ((InstalledApps.get(context, entry.packageName)?.versionCode ?: -1) >= apk.info.versionCode)
                                 updated += entry.name
                             else installing += entry.name // Standard installer results can arrive later.
                         }

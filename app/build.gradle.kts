@@ -7,7 +7,7 @@ plugins {
 
 // The release workflow sets APP_VERSION_NAME from the git tag (v1.2.3 -> 1.2.3).
 // versionCode is derived from it, so it always increases: 1.2.3 -> 10203.
-val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.0.5"
+val appVersionName: String = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.0.6"
 val appVersionCode: Int = appVersionName.split('.').map { it.toInt() }.let { (major, minor, patch) ->
     require(minor < 100 && patch < 100) { "minor and patch must be below 100" }
     major * 10_000 + minor * 100 + patch
@@ -81,6 +81,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.media3.session)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

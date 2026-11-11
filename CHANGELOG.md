@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-11
+
+### Added
+- Automatic Silora installs read its existing media session and defer while playback is active
+  or buffering. Paused/idle playback allows installation; connection failures defer safely.
+  Downloaded APKs remain ready for the next scheduled check or explicit manual installation.
+  Applies to Standard and Shizuku installation without extra notification access or player changes.
+
 ## [1.0.5] - 2026-11-09
 
 ### Fixed

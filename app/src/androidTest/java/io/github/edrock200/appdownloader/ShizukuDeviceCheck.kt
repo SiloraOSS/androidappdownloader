@@ -22,6 +22,8 @@ class ShizukuDeviceCheck : Instrumentation() {
     private var selfUpdateApk: String? = null
     private var verifySelfRecovery = false
     private var runMonitoringNow = false
+    private var playbackOnly = false
+    private var standardInstall = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -29,6 +31,8 @@ class ShizukuDeviceCheck : Instrumentation() {
         verifySelfRecovery = arguments?.getString("verifySelfRecovery") == "true"
         runMonitoringNow = arguments?.getString("runMonitoringNow") == "true"
         reinstallCurrent = arguments?.getString("reinstallCurrent") == "true"
+        playbackOnly = arguments?.getString("playbackOnly") == "true"
+        standardInstall = arguments?.getString("installer") == "standard"
         start()
     }
 
@@ -39,6 +43,27 @@ class ShizukuDeviceCheck : Instrumentation() {
             runOnMainSync { }
             runBlocking {
                 val app = targetContext.app()
+                if (playbackOnly) {
+                    val started = android.os.SystemClock.elapsedRealtime()
+                    val status = io.github.edrock200.appdownloader.install.SiloraMediaSession(app).read()
+                    output.putString("playback", status.name)
+                    output.putString("selectedInstaller", app.settings.current.installMethod.name)
+                    output.putBoolean("standardBackgroundEligible",
+                        io.github.edrock200.appdownloader.data.InstallPolicy.canInstallInBackground(
+                            io.github.edrock200.appdownloader.data.InstallMethod.STANDARD,
+                            android.os.Build.VERSION.SDK_INT,
+                            io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(app), false))
+                    output.putLong("queryDurationMs", android.os.SystemClock.elapsedRealtime() - started)
+                    output.putBoolean("allowsAutomaticSiloraInstall",
+                        io.github.edrock200.appdownloader.install.PlaybackInstallPolicy.allowsInstall(
+                            Silora.PACKAGE, true,
+                            io.github.edrock200.appdownloader.install.SiloraPlaybackReader { status }))
+                    output.putString("result", "Playback query only; no download or installation requested")
+                    check(status != io.github.edrock200.appdownloader.install.SiloraPlaybackStatus.UNKNOWN) {
+                        "Silora's playback state could not be read; automatic player installs would defer"
+                    }
+                    return@runBlocking
+                }
                 val marker = File(app.filesDir, "self-update-device-check-start")
                 if (runMonitoringNow) {
                     val state = app.settings.current
@@ -74,9 +99,10 @@ class ShizukuDeviceCheck : Instrumentation() {
                     marker.delete()
                     return@runBlocking
                 }
-                val state = app.shizuku.awaitReady()
+                // Standard checks must not initialize, authorize or use Shizuku.
+                val state = if (standardInstall) null else app.shizuku.awaitReady()
                 selfUpdateApk?.let { path ->
-                    check(state.ready) { state.help }
+                    check(state?.ready == true) { state?.help ?: "Self-upgrade check requires Shizuku" }
                     check(app.settings.current.checkIntervalHours > 0) { "Enable background checks before testing monitoring recovery" }
                     val source = File(path)
                     val info = withContext(Dispatchers.IO) { ApkInspector.inspect(app, source) }
@@ -109,9 +135,25 @@ class ShizukuDeviceCheck : Instrumentation() {
                     error("The self-install should kill this instrumentation process; verify recovery from ADB")
                 }
 
-                output.putString("shizuku", state.name)
-                check(state.ready) { state.help }
                 check(reinstallCurrent) { "Pass -e reinstallCurrent true to explicitly opt into reinstalling the existing APK" }
+                if (standardInstall) {
+                    check(app.settings.current.installMethod == io.github.edrock200.appdownloader.data.InstallMethod.STANDARD) {
+                        "Select Standard installation before running the Standard device check"
+                    }
+                    check(io.github.edrock200.appdownloader.data.InstallPolicy.canInstallInBackground(
+                        io.github.edrock200.appdownloader.data.InstallMethod.STANDARD,
+                        android.os.Build.VERSION.SDK_INT,
+                        io.github.edrock200.appdownloader.ui.SystemActions.canInstallPackages(app), false)) {
+                        "Standard background installation needs Android 12+ and install access"
+                    }
+                    check(app.repository.get(Silora.ID)?.readyFile == null && !app.controller.installRestore.value.active) {
+                        "Finish any pending Silora install/restore before running a reinstall check"
+                    }
+                    output.putString("installer", "STANDARD")
+                } else {
+                    output.putString("shizuku", state!!.name)
+                    check(state.ready) { state.help }
+                }
                 val installed = InstalledApps.get(app, Silora.PACKAGE) ?: error("Silora must already be installed")
                 val packageInfo = app.packageManager.getPackageInfo(Silora.PACKAGE, 0)
                 check(packageInfo.splitNames.isNullOrEmpty()) { "This check requires the normal single-APK Silora build" }
@@ -123,16 +165,32 @@ class ShizukuDeviceCheck : Instrumentation() {
                 val cached = File(app.cacheDir, "device-check-silora.apk")
                 withContext(Dispatchers.IO) { file.copyTo(cached, overwrite = true) }
                 try {
-                    val callback = ApkInstaller.resultCallback(app, 0, cached, info, Silora.ID, null,
-                        false, installed.versionName, installed.versionCode, viaShizuku = true)
-                    ShizukuInstaller.install(app, cached, info, callback.intentSender)
+                    if (standardInstall) {
+                        val playback = io.github.edrock200.appdownloader.install.SiloraMediaSession(app).read()
+                        output.putString("playback", playback.name)
+                        check(io.github.edrock200.appdownloader.install.PlaybackInstallPolicy.allowsInstall(
+                            Silora.PACKAGE, true,
+                            io.github.edrock200.appdownloader.install.SiloraPlaybackReader { playback })) {
+                            "Playback protection deferred the Standard install: $playback"
+                        }
+                        withContext(Dispatchers.IO) {
+                            ApkInstaller.install(app, cached, info, Silora.ID, null, background = true,
+                                previousVersionName = installed.versionName, previousVersionCode = installed.versionCode)
+                        }
+                    } else {
+                        val callback = ApkInstaller.resultCallback(app, 0, cached, info, Silora.ID, null,
+                            false, installed.versionName, installed.versionCode, viaShizuku = true)
+                        ShizukuInstaller.install(app, cached, info, callback.intentSender)
+                    }
                     withTimeout(15_000) {
                         while (app.repository.get(Silora.ID)?.history?.none {
                                 it.at >= startedAt && it.versionCode == installed.versionCode && it.byApp
                             } != false) delay(100)
                     }
                     check(InstalledApps.get(app, Silora.PACKAGE)?.versionCode == installed.versionCode)
-                    output.putString("result", "PASS: Shizuku session, APK stream, commit, result receiver, and history")
+                    output.putString("result", if (standardInstall)
+                        "PASS: playback gate, Standard background install, result receiver, and history; no Shizuku"
+                        else "PASS: Shizuku session, APK stream, commit, result receiver, and history")
                     output.putLong("versionCode", installed.versionCode)
                 } finally {
                     withContext(Dispatchers.IO) { cached.delete() }
