@@ -8,6 +8,9 @@ import java.util.UUID
 @Serializable
 enum class SourceType { URL, AFTV_CODE, GITHUB }
 
+@Serializable
+enum class PlaybackDeferral { ACTIVE, UNAVAILABLE }
+
 /**
  * A saved download source. [source] holds a URL, a numeric aftv.news code, or a
  * GitHub "owner/repo" slug depending on [type].
@@ -52,12 +55,14 @@ data class AppEntry(
     // ---- Scheduled updates ----
     /** Include this app when scheduled / "update all" runs happen. */
     val autoUpdate: Boolean = true,
-    /** A downloaded update waiting to be installed (Android needed the user to confirm). */
+    /** A downloaded update waiting for installation, including playback or installer deferral. */
     val readyFile: String? = null,
     val readyVersionName: String? = null,
     val readyVersionCode: Long? = null,
     /** Release tag of [readyFile], for GitHub entries. */
     val readyTag: String? = null,
+    /** Why the last automatic install attempt waited; cleared when the APK is replaced or installed. */
+    val playbackDeferral: PlaybackDeferral? = null,
 
     // ---- Change detection for links / aftv codes ----
     /** Server details of the file that was last installed from this entry. */

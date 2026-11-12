@@ -52,6 +52,7 @@ fun SiloraSettingsDialog(
     onInterval: (Int) -> Unit,
     onDailyCheck: (Int) -> Unit,
     onAutomaticInstall: (Boolean) -> Unit,
+    onWaitUntilPlaybackStops: (Boolean) -> Unit,
     onDeleteAfterInstall: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onInstallPermission: () -> Unit,
@@ -130,6 +131,13 @@ fun SiloraSettingsDialog(
                         "If confirmation is needed, the download waits for you. Includes Silora Updater itself; Silora must be installed once first.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                HorizontalDivider()
+                PreferenceSwitch("Wait until playback stops", current.waitUntilPlaybackStops,
+                    enabled = current.autoInstallUpdates, onChange = onWaitUntilPlaybackStops)
+                Text("Delay automatic Silora installation while playing or buffering. " +
+                    "Turning this off may interrupt playback. Manual installs still proceed. " +
+                    "Deferred updates retry at the next scheduled check.",
+                    style = MaterialTheme.typography.bodySmall)
                 HorizontalDivider()
                 Text(if (notificationsEnabled) "Update notifications: enabled" else "Update notifications: off",
                     style = MaterialTheme.typography.titleSmall)

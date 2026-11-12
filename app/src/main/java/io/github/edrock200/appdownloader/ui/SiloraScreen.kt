@@ -254,6 +254,7 @@ fun SiloraScreen(vm: MainViewModel) {
                 }
             },
             onDeleteAfterInstall = vm::setDeleteAfterInstall, onTheme = vm::setTheme,
+            onWaitUntilPlaybackStops = vm::setWaitUntilPlaybackStops,
             onInstallPermission = {
                 showSettings = false
                 installAfterPermission = false

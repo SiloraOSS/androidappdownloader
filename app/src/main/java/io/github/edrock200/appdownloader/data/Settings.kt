@@ -16,6 +16,8 @@ data class SettingsState(
     val checkHour: Int = 3,
     /** Download and attempt to install newer Silora builds at each background check. */
     val autoInstallUpdates: Boolean = true,
+    /** Automatic Silora installs wait for playback to stop; explicit installs still proceed. */
+    val waitUntilPlaybackStops: Boolean = true,
     /** Device-specific: Shizuku authorization is never restored from a backup. */
     val installMethod: InstallMethod = InstallMethod.STANDARD,
     val deleteApkAfterInstall: Boolean = true,
@@ -114,6 +116,7 @@ class Settings(context: Context) {
             .putBoolean(KEY_CHECK_DAILY, newState.checkDaily)
             .putInt(KEY_CHECK_HOUR, newState.checkHour)
             .putBoolean(KEY_AUTO_INSTALL, newState.autoInstallUpdates)
+            .putBoolean(KEY_WAIT_FOR_PLAYBACK, newState.waitUntilPlaybackStops)
             .putString(KEY_INSTALL_METHOD, newState.installMethod.name)
             .putBoolean(KEY_DELETE, newState.deleteApkAfterInstall)
             .putBoolean(KEY_SELF_UPDATE, newState.checkSelfUpdates)
@@ -130,6 +133,7 @@ class Settings(context: Context) {
         checkDaily = prefs.getBoolean(KEY_CHECK_DAILY, false),
         checkHour = prefs.getInt(KEY_CHECK_HOUR, 3),
         autoInstallUpdates = prefs.getBoolean(KEY_AUTO_INSTALL, true),
+        waitUntilPlaybackStops = prefs.getBoolean(KEY_WAIT_FOR_PLAYBACK, true),
         installMethod = runCatching { InstallMethod.valueOf(prefs.getString(KEY_INSTALL_METHOD, null)!!) }
             .getOrDefault(InstallMethod.STANDARD),
         deleteApkAfterInstall = prefs.getBoolean(KEY_DELETE, true),
@@ -150,6 +154,7 @@ class Settings(context: Context) {
         private const val KEY_CHECK_HOUR = "check_hour"
         private const val KEY_INTERVAL = "check_interval_hours"
         private const val KEY_AUTO_INSTALL = "auto_install_updates"
+        private const val KEY_WAIT_FOR_PLAYBACK = "wait_until_playback_stops"
         private const val KEY_INSTALL_METHOD = "install_method"
         private const val KEY_INSTALL_PERMISSION_REQUEST = "install_permission_request"
         private const val KEY_DELETE = "delete_after_install"

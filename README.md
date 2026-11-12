@@ -68,11 +68,19 @@ local time zone and 12/24-hour display preference; the home screen shows the sav
 Late checks do not shift the following day's chosen hour.
 **Install updates automatically** is a separate, persistent switch (on by default); when on, each background check downloads newer builds of Silora and Silora Updater and attempts installation using the selected installer. Silora is handled first because updating the updater closes its process.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
-Before automatically installing a Silora update, the updater reads Silora's existing media session.
+**Settings → Wait until playback stops** is enabled by default and saved on this device. It is
+available while automatic installation is on. With it enabled, before automatically installing
+a Silora update, the updater reads Silora's existing media session.
 Playing or buffering defers installation until the next scheduled check; the downloaded APK stays
 ready. Paused playback, browsing, and idle screens allow installation. An unreadable session also
-defers the automatic install. Explicit manual installs still proceed, and updating Silora Updater
-itself does not wait for Silora playback. No notification-access permission or Silora change is needed.
+defers the automatic install. The dashboard shows **Waiting for playback** when playback deferred a
+downloaded update, or **Playback check unavailable** when the session could not be read. Downloads
+waiting for confirmation or an available installer keep their usual messages. Retrying happens at
+the next scheduled check; stopping playback does not trigger an immediate installation.
+Turning the setting off skips the playback check on the next automatic install attempt, which may
+interrupt playback. Turning automatic installation off preserves this separate saved choice.
+Explicit manual installs still proceed, and updating Silora Updater itself does not wait for Silora
+playback. No notification-access permission or Silora change is needed.
 Android's power/network restrictions can delay background work. If Android requires confirmation
 or the selected Shizuku connection is unavailable, the download stays ready and the app offers **Install update** when opened, even while offline.
 

@@ -425,10 +425,16 @@ class AppController(
         }
         // Check after downloading and installer readiness, immediately before replacement.
         // Both background workers use this path, as do Standard and Shizuku installs.
-        if (!PlaybackInstallPolicy.allowsInstall(apk.packageName, background, playback)) {
+        val deferral = PlaybackInstallPolicy.deferralReason(apk.packageName, background, playback,
+            settings.current.waitUntilPlaybackStops)
+        if (deferral != null) {
+            updateManagedEntry(opId) { it.copy(playbackDeferral = deferral) }
             setOp(opId, null)
             android.util.Log.i("SiloraUpdater", "Deferred automatic Silora install: playback active or unavailable; retry on next scheduled check")
             return false
+        }
+        if (managedEntry(opId)?.playbackDeferral != null) {
+            updateManagedEntry(opId) { it.copy(playbackDeferral = null) }
         }
         setOp(opId, OpState.Installing)
         if (settings.current.installMethod == InstallMethod.SHIZUKU) {
@@ -484,7 +490,8 @@ class AppController(
     }
 
     private fun AppEntry.clearReady() =
-        copy(readyFile = null, readyVersionName = null, readyVersionCode = null, readyTag = null)
+        copy(readyFile = null, readyVersionName = null, readyVersionCode = null, readyTag = null,
+            playbackDeferral = null)
 
     internal class DownloadedApk(val file: File, val info: ApkInfo, val fingerprint: RemoteFingerprint? = null) {
         val packageName get() = info.packageName
@@ -984,6 +991,7 @@ class AppController(
                 readyVersionName = apk.info.versionName,
                 readyVersionCode = apk.info.versionCode,
                 readyTag = tag,
+                playbackDeferral = null,
                 pendingFingerprint = apk.fingerprint,
             )
         }

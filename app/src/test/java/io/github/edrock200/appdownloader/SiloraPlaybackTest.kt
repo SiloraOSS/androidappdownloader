@@ -2,6 +2,7 @@ package io.github.edrock200.appdownloader
 
 import androidx.media3.common.Player
 import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import io.github.edrock200.appdownloader.install.PlaybackInstallPolicy
 import io.github.edrock200.appdownloader.install.SiloraMediaSession
 import io.github.edrock200.appdownloader.install.SiloraPlaybackReader
@@ -41,6 +42,19 @@ class SiloraPlaybackTest {
         val reader = SiloraPlaybackReader { error("This install must not query Silora's session") }
         assertTrue(PlaybackInstallPolicy.allowsInstall(Silora.PACKAGE, false, reader))
         assertTrue(PlaybackInstallPolicy.allowsInstall("org.silora.updater", true, reader))
+    }
+
+    @Test fun disablingPlaybackProtectionSkipsTheQueryEntirely() = runBlocking {
+        assertTrue(PlaybackInstallPolicy.allowsInstall(Silora.PACKAGE, true,
+            SiloraPlaybackReader { error("Disabled protection must not query playback") },
+            waitUntilPlaybackStops = false))
+    }
+
+    @Test fun unavailablePlaybackIsDistinguishedFromActivePlayback() = runBlocking {
+        assertEquals(PlaybackDeferral.ACTIVE, PlaybackInstallPolicy.deferralReason(Silora.PACKAGE, true,
+            SiloraPlaybackReader { SiloraPlaybackStatus.PLAYING }, true))
+        assertEquals(PlaybackDeferral.UNAVAILABLE, PlaybackInstallPolicy.deferralReason(Silora.PACKAGE, true,
+            SiloraPlaybackReader { SiloraPlaybackStatus.UNKNOWN }, true))
     }
 
     @Test(expected = CancellationException::class)

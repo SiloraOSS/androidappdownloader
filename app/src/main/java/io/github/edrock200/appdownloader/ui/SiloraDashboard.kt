@@ -62,6 +62,7 @@ import io.github.edrock200.appdownloader.BuildConfig
 import io.github.edrock200.appdownloader.OpState
 import io.github.edrock200.appdownloader.R
 import io.github.edrock200.appdownloader.data.InstallMethod
+import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.install.ShizukuState
 import java.util.Date
@@ -135,10 +136,15 @@ internal fun SiloraDashboard(
                 Text("Your next chapter starts here.", style = MaterialTheme.typography.headlineLarge, color = colors.onBackground)
                 Text("The latest Silora. The right build for your device.", color = colors.onSurfaceVariant)
             }
+            val playbackDeferral = item?.entry?.playbackDeferral?.takeIf {
+                item.waiting && settings.autoInstallUpdates && settings.waitUntilPlaybackStops &&
+                    (!usingShizuku || shizuku.ready)
+            }
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
                     onInstall, onCheck, onOpen, onCancel, restoring, checkFocus, primaryFocus, preferredFocus,
-                    onActionFocused = { preferPrimaryFocus = it }, modifier = cardModifier)
+                    onActionFocused = { preferPrimaryFocus = it }, playbackDeferral = playbackDeferral,
+                    modifier = cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
@@ -184,6 +190,7 @@ private fun SiloraUpdateCard(
     primaryFocus: FocusRequester,
     preferredFocus: FocusRequester,
     onActionFocused: (primary: Boolean) -> Unit,
+    playbackDeferral: PlaybackDeferral?,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -213,9 +220,9 @@ private fun SiloraUpdateCard(
                     Text(if (compact) "TV edition" else if (isTv) "Fire TV · Android TV · Google TV" else "Android phones & tablets",
                         style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
-                if (compact) UpdateBadge(item, checking, busy, error, current)
+                if (compact) UpdateBadge(item, checking, busy, error, current, playbackDeferral)
             }
-            if (!compact) UpdateBadge(item, checking, busy, error, current)
+            if (!compact) UpdateBadge(item, checking, busy, error, current, playbackDeferral)
             if (item == null) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             } else {
@@ -240,6 +247,10 @@ private fun SiloraUpdateCard(
                     op is OpState.Failed -> op.message
                     checking -> "Checking for updates…"
                     item.waiting -> if (usingShizuku && !shizuku.ready) "An update is downloaded. ${shizuku.help}"
+                        else if (playbackDeferral == PlaybackDeferral.ACTIVE)
+                            "Update downloaded · Waiting for playback to stop. Retries at the next scheduled check, or choose Install update."
+                        else if (playbackDeferral == PlaybackDeferral.UNAVAILABLE)
+                            "Update downloaded · Could not check playback. Retries at the next scheduled check, or choose Install update."
                         else "An update is downloaded. Choose Install update to finish."
                     item.entry.lastCheckError != null -> item.entry.lastCheckError
                     item.hasUpdate -> "A new Silora build is ready. Update to keep watching at your best."
@@ -313,7 +324,8 @@ private fun SiloraUpdateCard(
 }
 
 @Composable
-private fun UpdateBadge(item: EntryUi?, checking: Boolean, busy: Boolean, error: Boolean, current: Boolean) {
+private fun UpdateBadge(item: EntryUi?, checking: Boolean, busy: Boolean, error: Boolean, current: Boolean,
+    playbackDeferral: PlaybackDeferral?) {
     val colors = MaterialTheme.colorScheme
     val known = item?.entry?.latestVersionCode != null && item.entry.lastCheckError == null
     val badgeColor = when { error -> colors.error; current && !busy && !checking -> colors.tertiary; else -> colors.primary }
@@ -326,6 +338,8 @@ private fun UpdateBadge(item: EntryUi?, checking: Boolean, busy: Boolean, error:
                 busy -> "Update in progress"
                 checking || item == null -> "Checking for updates"
                 error -> "Needs attention"
+                item.waiting && playbackDeferral == PlaybackDeferral.ACTIVE -> "Waiting for playback"
+                item.waiting && playbackDeferral == PlaybackDeferral.UNAVAILABLE -> "Playback check unavailable"
                 item.waiting -> "Ready to install"
                 item.hasUpdate -> "Update available"
                 current -> "You're up to date"

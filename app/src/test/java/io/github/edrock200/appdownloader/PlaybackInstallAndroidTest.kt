@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.pm.PackageInfo
 import io.github.edrock200.appdownloader.data.EntryRepository
 import io.github.edrock200.appdownloader.data.InstallMethod
+import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import io.github.edrock200.appdownloader.data.Settings
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.install.ApkInfo
@@ -58,6 +59,9 @@ class PlaybackInstallAndroidTest {
                 assertFalse(controller.install(Silora.ID, apk, "new", background = true))
                 assertTrue(apk.file.exists())
                 assertEquals(apk.file.absolutePath, repository.get(Silora.ID)!!.readyFile)
+                val expectedReason = if (state == SiloraPlaybackStatus.PLAYING)
+                    PlaybackDeferral.ACTIVE else PlaybackDeferral.UNAVAILABLE
+                assertEquals(expectedReason, EntryRepository(context).get(Silora.ID)!!.playbackDeferral)
                 assertFalse(controller.isBusy(Silora.ID))
                 assertTrue(context.packageManager.packageInstaller.mySessions.isEmpty())
             }
@@ -70,16 +74,40 @@ class PlaybackInstallAndroidTest {
         val controller = AppController(context, repository, settings, scope,
             SiloraPlaybackReader { reads++; state })
         assertFalse(controller.install(Silora.ID, apk, "new", background = true))
+        assertEquals(PlaybackDeferral.ACTIVE, repository.get(Silora.ID)!!.playbackDeferral)
         state = SiloraPlaybackStatus.IDLE
         assertTrue(controller.install(Silora.ID, apk, "new", background = true))
+        assertNull(repository.get(Silora.ID)!!.playbackDeferral)
         assertEquals(2, reads)
         assertTrue(context.packageManager.packageInstaller.mySessions.any { it.appPackageName == Silora.PACKAGE })
     }
 
     @Test fun explicitManualInstallationBypassesThePlaybackQuery() = runBlocking {
+        repository.update(Silora.ID) { it.copy(playbackDeferral = PlaybackDeferral.ACTIVE) }
         val controller = AppController(context, repository, settings, scope,
             SiloraPlaybackReader { error("Manual install must not query playback") })
         assertTrue(controller.install(Silora.ID, apk, "new", background = false))
+        assertNull(repository.get(Silora.ID)!!.playbackDeferral)
         assertTrue(context.packageManager.packageInstaller.mySessions.any { it.appPackageName == Silora.PACKAGE })
+    }
+
+    @Test fun disabledProtectionClearsThePreviousReasonAndStartsInstallationWithoutQuerying() = runBlocking {
+        repository.update(Silora.ID) { it.copy(playbackDeferral = PlaybackDeferral.ACTIVE) }
+        settings.update(settings.current.copy(waitUntilPlaybackStops = false))
+        val controller = AppController(context, repository, settings, scope,
+            SiloraPlaybackReader { error("Disabled protection must not query playback") })
+        assertTrue(controller.install(Silora.ID, apk, "new", background = true))
+        assertNull(repository.get(Silora.ID)!!.playbackDeferral)
+        assertTrue(context.packageManager.packageInstaller.mySessions.any { it.appPackageName == Silora.PACKAGE })
+    }
+
+    @Test fun staleDownloadClearsItsPlaybackReasonWhenTheVersionIsAlreadyInstalled() = runBlocking {
+        repository.update(Silora.ID) { it.copy(playbackDeferral = PlaybackDeferral.ACTIVE) }
+        val controller = AppController(context, repository, settings, scope,
+            SiloraPlaybackReader { error("An already installed version must not query playback") })
+        val stale = AppController.DownloadedApk(apk.file, apk.info.copy(versionCode = 1))
+        assertTrue(controller.install(Silora.ID, stale, "old", background = true))
+        assertNull(repository.get(Silora.ID)!!.playbackDeferral)
+        assertNull(repository.get(Silora.ID)!!.readyFile)
     }
 }

@@ -309,6 +309,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setDailyCheck(hour: Int) = saveSettings(app.settings.current.copy(
         checkIntervalHours = 24, checkDaily = true, checkHour = hour))
     fun setAutomaticInstallation(enabled: Boolean) = saveSettings(app.settings.current.copy(autoInstallUpdates = enabled))
+    fun setWaitUntilPlaybackStops(enabled: Boolean) = saveSettings(app.settings.current.copy(waitUntilPlaybackStops = enabled))
     fun setInstallMethod(method: io.github.edrock200.appdownloader.data.InstallMethod) {
         saveSettings(app.settings.current.copy(installMethod = method))
         app.shizuku.refresh()

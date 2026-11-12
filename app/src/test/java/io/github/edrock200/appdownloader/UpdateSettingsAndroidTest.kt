@@ -70,6 +70,22 @@ class UpdateSettingsAndroidTest {
         assertFalse(Settings(context).current.autoInstallUpdates)
     }
 
+    @Test fun playbackProtectionDefaultsOnAndExplicitOffSurvivesRestartAndAutomaticInstallChanges() {
+        val settings = Settings(context)
+        assertTrue(settings.current.waitUntilPlaybackStops)
+        settings.update(settings.current.copy(waitUntilPlaybackStops = false))
+        assertFalse(Settings(context).current.waitUntilPlaybackStops)
+        settings.update(settings.current.copy(autoInstallUpdates = false))
+        settings.update(settings.current.copy(autoInstallUpdates = true))
+        assertFalse(Settings(context).current.waitUntilPlaybackStops)
+        settings.update(settings.current.copy(checkIntervalHours = 0))
+        assertFalse(Settings(context).current.waitUntilPlaybackStops)
+        settings.update(settings.current.copy(checkIntervalHours = 12, autoInstallUpdates = true))
+        assertFalse(Settings(context).current.waitUntilPlaybackStops)
+        settings.update(settings.current.copy(waitUntilPlaybackStops = true))
+        assertTrue(Settings(context).current.waitUntilPlaybackStops)
+    }
+
     @Test fun disablingChecksPersistsWithAutomaticInstallationOff() {
         val settings = Settings(context)
         settings.update(settings.current.copy(autoInstallUpdates = true))

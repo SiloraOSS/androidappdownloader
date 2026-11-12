@@ -6,7 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-11
+
 ### Added
+- Add a saved Wait until playback stops setting, enabled by default, under automatic installation.
+  Turning it off skips playback checks for automatic Silora installs; manual installs still proceed.
+- Show when a downloaded update was deferred for playback, including a separate message when
+  playback could not be checked. Deferred updates retry at the next scheduled check.
 - Show Last Updated beneath the installed and latest versions, using Silora's actual installation
   timestamp from Android and the device's local date and time format.
 

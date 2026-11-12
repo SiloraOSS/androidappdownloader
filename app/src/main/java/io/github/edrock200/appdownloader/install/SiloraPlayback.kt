@@ -7,6 +7,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -70,8 +71,17 @@ class SiloraMediaSession(context: Context) : SiloraPlaybackReader {
 
 /** Applies to automatic player replacement; explicit installs and updater self-updates proceed. */
 object PlaybackInstallPolicy {
-    suspend fun allowsInstall(packageName: String, background: Boolean, reader: SiloraPlaybackReader): Boolean {
-        if (!background || packageName != Silora.PACKAGE) return true
-        return reader.read() == SiloraPlaybackStatus.IDLE
+    suspend fun allowsInstall(packageName: String, background: Boolean, reader: SiloraPlaybackReader,
+        waitUntilPlaybackStops: Boolean = true): Boolean =
+        deferralReason(packageName, background, reader, waitUntilPlaybackStops) == null
+
+    suspend fun deferralReason(packageName: String, background: Boolean, reader: SiloraPlaybackReader,
+        waitUntilPlaybackStops: Boolean): PlaybackDeferral? {
+        if (!background || packageName != Silora.PACKAGE || !waitUntilPlaybackStops) return null
+        return when (reader.read()) {
+            SiloraPlaybackStatus.PLAYING -> PlaybackDeferral.ACTIVE
+            SiloraPlaybackStatus.UNKNOWN -> PlaybackDeferral.UNAVAILABLE
+            SiloraPlaybackStatus.IDLE -> null
+        }
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.data.Silora
+import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import io.github.edrock200.appdownloader.install.InstalledInfo
 import io.github.edrock200.appdownloader.install.ShizukuState
 import io.github.edrock200.appdownloader.ui.EntryUi
@@ -40,6 +41,7 @@ class SiloraFocusAndroidTest {
     )
     private var item by mutableStateOf(EntryUi(release, null, null, false))
     private var checking by mutableStateOf(false)
+    private var settings by mutableStateOf(SettingsState())
 
     @Before fun showDashboard() {
         activity = Robolectric.buildActivity(ComponentActivity::class.java).setup()
@@ -47,7 +49,7 @@ class SiloraFocusAndroidTest {
             AppTheme {
                 SiloraDashboard(
                     item = item, checking = checking, updatingAutomatically = false,
-                    settings = SettingsState(), shizuku = ShizukuState.READY,
+                    settings = settings, shizuku = ShizukuState.READY,
                     installAllowed = true, notificationsEnabled = true,
                     canOpen = item.installed != null, isTv = true,
                     onInstall = {}, onCheck = {}, onOpen = {}, onCancel = {},
@@ -131,5 +133,32 @@ class SiloraFocusAndroidTest {
         updateState { item = item.copy(op = OpState.Installing) }
         updateState { item = item.copy(installed = InstalledInfo("3.0", 3), op = null) }
         compose.onNodeWithText("Check for updates").assertIsFocused()
+    }
+
+    @Test fun waitingReasonDistinguishesPlaybackFromConfirmationAndRespectsTheSetting() {
+        updateState {
+            item = item.copy(installed = InstalledInfo("2.0", 2), hasUpdate = true,
+                entry = release.copy(readyFile = "/downloaded.apk", playbackDeferral = PlaybackDeferral.ACTIVE))
+        }
+        compose.onNodeWithText("Waiting for playback").assertExists()
+        compose.onNodeWithText("Update downloaded · Waiting for playback to stop.", substring = true).assertExists()
+        updateState { settings = settings.copy(waitUntilPlaybackStops = false) }
+        compose.onNodeWithText("Waiting for playback").assertDoesNotExist()
+        compose.onNodeWithText("An update is downloaded. Choose Install update to finish.").assertExists()
+        updateState {
+            settings = settings.copy(waitUntilPlaybackStops = true)
+            item = item.copy(entry = item.entry.copy(playbackDeferral = PlaybackDeferral.UNAVAILABLE))
+        }
+        compose.onNodeWithText("Playback check unavailable").assertExists()
+        compose.onNodeWithText("Update downloaded · Could not check playback.", substring = true).assertExists()
+        updateState { settings = settings.copy(autoInstallUpdates = false) }
+        compose.onNodeWithText("Playback check unavailable").assertDoesNotExist()
+    }
+
+    @Test @Config(qualifiers = "w400dp-h800dp")
+    fun stackedLayoutShowsPlaybackDeferralToo() {
+        updateState { item = item.copy(entry = release.copy(readyFile = "/downloaded.apk", playbackDeferral = PlaybackDeferral.ACTIVE)) }
+        compose.onNodeWithText("Waiting for playback").assertExists()
+        compose.onNodeWithText("Update downloaded · Waiting for playback to stop.", substring = true).assertExists()
     }
 }
