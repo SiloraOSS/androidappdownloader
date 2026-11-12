@@ -21,6 +21,8 @@ or **Update Silora**.
 ## How it works
 
 - Install this updater, open it, and choose **Install Silora** or **Update Silora**.
+- **Last Updated**, beneath the installed and latest versions, shows when the installed Silora build was installed
+  or updated, using the device's local date and time format, including installs made outside this updater.
 - Silora is built in permanently. Users cannot edit its source, remove it, add other apps,
   or replace the configuration through a backup.
 - Fire TV / Android TV / Google TV get `silora-tv.apk`; phones and tablets get `silora-phone.apk`.

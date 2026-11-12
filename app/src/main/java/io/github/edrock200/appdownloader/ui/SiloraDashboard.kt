@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -63,6 +64,7 @@ import io.github.edrock200.appdownloader.R
 import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.install.ShizukuState
+import java.util.Date
 
 /** Presentation only; permission handling and all update actions stay in SiloraScreen. */
 @OptIn(ExperimentalComposeUiApi::class)
@@ -220,6 +222,14 @@ private fun SiloraUpdateCard(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     VersionLabel("INSTALLED", item.installed?.versionName ?: if (item.installed != null) "Installed" else "Not installed", Modifier.weight(1f))
                     VersionLabel("LATEST RELEASE", item.entry.latestVersionName ?: "Not checked yet", Modifier.weight(1f))
+                }
+                item.installed?.installedAt?.takeIf { it > 0 }?.let { installedAt ->
+                    val context = LocalContext.current
+                    val date = Date(installedAt)
+                    val timestamp = android.text.format.DateFormat.getMediumDateFormat(context).format(date) +
+                        " at " + android.text.format.DateFormat.getTimeFormat(context).format(date)
+                    Text("Last Updated: $timestamp", style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant)
                 }
                 if (!compact) HorizontalDivider(color = colors.outlineVariant)
                 val status = when {

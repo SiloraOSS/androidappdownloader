@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Show Last Updated beneath the installed and latest versions, using Silora's actual installation
+  timestamp from Android and the device's local date and time format.
+
 ## [1.0.6] - 2026-11-11
 
 ### Added
