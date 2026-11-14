@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Keep the selected Past installs entry's date and description visible when TV remote focus
+  scrolls a long history list to its Restore button.
+
 ## [1.0.7] - 2026-11-11
 
 ### Added

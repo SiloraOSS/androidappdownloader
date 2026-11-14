@@ -19,6 +19,20 @@ retries, history recording, and automatic-installation suppression.
 
 Run the maintained signed release checks with `./build.sh`.
 
+History dialog UI tests also cover overflowing lists, navigation to older entries and back,
+and enlarged text. Focusing **Restore this build** scrolls the whole entry into view so its
+date and description stay visible along with the action.
+If enlarged text makes an entry taller than the viewport, scrolling keeps its Restore action
+reachable instead of trying to display the entire entry at once.
+
+## History dialog verification — 2026-11-14
+
+A signed local build was checked on an NVIDIA SHIELD Android TV running Android 11 at
+1920 × 1080 with the default font size. The recorded history overflowed the dialog. Opening
+the list and moving remote focus between Restore buttons, including back to the first entry,
+kept the selected entry's complete date visible. UI regression tests also check 130% text
+and action visibility when 200% text makes an entry taller than the viewport.
+
 ## Device smoke test
 
 The new flow has not yet been exercised through a physical device's system uninstall and
