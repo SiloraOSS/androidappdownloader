@@ -21,8 +21,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +42,12 @@ import io.github.edrock200.appdownloader.data.InstallMethod
 import io.github.edrock200.appdownloader.install.ShizukuState
 import android.content.Context
 import java.util.Date
+
+enum class SiloraSettingsPage(val title: String) {
+    ALL("Settings"),
+    BACKGROUND_CHECKS("Background checks"),
+    INSTALLATION_METHOD("Installation method"),
+}
 
 @Composable
 fun SiloraSettingsDialog(
@@ -60,105 +70,125 @@ fun SiloraSettingsDialog(
     onHistory: () -> Unit,
     onCheckSelfUpdate: () -> Unit,
     onDismiss: () -> Unit,
+    page: SiloraSettingsPage = SiloraSettingsPage.ALL,
 ) {
+    val initialFocus = remember { FocusRequester() }
+    val isTv = rememberIsTv()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Image(painterResource(R.drawable.silora_mark), contentDescription = null, modifier = Modifier.size(32.dp))
-                Text("Settings")
+                Text(page.title)
             }
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SettingsSection("Check for Silora and updater updates")
-                Text("Checks for both Silora and Silora Updater also run when you open the updater. Background timing may vary with your device's power settings.",
-                    style = MaterialTheme.typography.bodySmall)
-                Settings.INTERVAL_OPTIONS.forEach { hours ->
-                    PreferenceChoice(if (hours == 0) "When opened / manual only" else "Every $hours hours",
-                        !current.hasDailyCheck && current.checkIntervalHours == hours) { onInterval(hours) }
-                }
-                PreferenceChoice("Custom", current.hasDailyCheck) { onDailyCheck(current.checkHour) }
-                if (current.hasDailyCheck) {
-                    Text("Daily check time", style = MaterialTheme.typography.titleSmall)
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = { onDailyCheck((current.checkHour + 23) % 24) },
-                            modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour earlier" }) {
-                            Text("−")
-                        }
-                        Text(formatCheckHour(LocalContext.current, current.checkHour),
-                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                        OutlinedButton(onClick = { onDailyCheck((current.checkHour + 1) % 24) },
-                            modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour later" }) {
-                            Text("+")
-                        }
-                    }
-                    Text("Checks once a day at this time in your device's local time zone. " +
-                        "If the device is asleep or offline, the check may happen later.",
+                if (page != SiloraSettingsPage.INSTALLATION_METHOD) {
+                    SettingsSection("Check for Silora and updater updates")
+                    Text("Checks for both Silora and Silora Updater also run when you open the updater. Background timing may vary with your device's power settings.",
                         style = MaterialTheme.typography.bodySmall)
-                }
-                HorizontalDivider()
-                SettingsSection("App installation method")
-                InstallMethod.entries.forEach { method ->
-                    PreferenceChoice(method.label, current.installMethod == method,
-                        enabled = method != InstallMethod.SHIZUKU || shizuku != ShizukuState.UNSUPPORTED) { onInstallMethod(method) }
-                }
-                if (current.installMethod == InstallMethod.SHIZUKU) {
-                    Text("Shizuku: ${shizuku.label}", style = MaterialTheme.typography.titleSmall)
-                    Text(shizuku.help, style = MaterialTheme.typography.bodySmall)
-                    if (shizuku == ShizukuState.PERMISSION_REQUIRED) {
-                        OutlinedButton(onClick = onAuthorizeShizuku, modifier = Modifier.focusHighlight()) { Text("Authorize Shizuku") }
+                    Text("Automatic installation requires background checks. Choosing manual-only checks also turns automatic installation off.",
+                        style = MaterialTheme.typography.bodySmall)
+                    Settings.INTERVAL_OPTIONS.forEach { hours ->
+                        val selected = !current.hasDailyCheck && current.checkIntervalHours == hours
+                        PreferenceChoice(if (hours == 0) "When opened / manual only" else "Every $hours hours",
+                            selected, modifier = if (selected) Modifier.focusRequester(initialFocus) else Modifier) { onInterval(hours) }
                     }
-                    if (shizuku != ShizukuState.NOT_INSTALLED && shizuku != ShizukuState.UNSUPPORTED) {
-                        OutlinedButton(onClick = onOpenShizuku, modifier = Modifier.focusHighlight()) { Text("Open Shizuku") }
+                    PreferenceChoice("Custom", current.hasDailyCheck,
+                        modifier = if (current.hasDailyCheck) Modifier.focusRequester(initialFocus) else Modifier) { onDailyCheck(current.checkHour) }
+                    if (current.hasDailyCheck) {
+                        Text("Daily check time", style = MaterialTheme.typography.titleSmall)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedButton(onClick = { onDailyCheck((current.checkHour + 23) % 24) },
+                                modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour earlier" }) {
+                                Text("−")
+                            }
+                            Text(formatCheckHour(LocalContext.current, current.checkHour),
+                                modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            OutlinedButton(onClick = { onDailyCheck((current.checkHour + 1) % 24) },
+                                modifier = Modifier.focusHighlight().semantics { contentDescription = "One hour later" }) {
+                                Text("+")
+                            }
+                        }
+                        Text("Checks once a day at this time in your device's local time zone. " +
+                            "If the device is asleep or offline, the check may happen later.",
+                            style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(onClick = onShizukuHelp, modifier = Modifier.focusHighlight()) { Text("Shizuku setup help") }
-                } else {
-                    Text(if (installAllowed) "Install permission: allowed" else "Install permission: needs setup",
+                }
+                if (page == SiloraSettingsPage.ALL) HorizontalDivider()
+                if (page != SiloraSettingsPage.BACKGROUND_CHECKS) {
+                    SettingsSection("App installation method")
+                    InstallMethod.entries.forEach { method ->
+                        val enabled = method != InstallMethod.SHIZUKU || shizuku != ShizukuState.UNSUPPORTED
+                        val initiallyFocused = if (shizuku == ShizukuState.UNSUPPORTED) method == InstallMethod.STANDARD
+                            else current.installMethod == method
+                        PreferenceChoice(method.label, current.installMethod == method,
+                            enabled = enabled, modifier = if (initiallyFocused) Modifier.focusRequester(initialFocus) else Modifier) { onInstallMethod(method) }
+                    }
+                    if (current.installMethod == InstallMethod.SHIZUKU) {
+                        Text("Shizuku: ${shizuku.label}", style = MaterialTheme.typography.titleSmall)
+                        Text(shizuku.help, style = MaterialTheme.typography.bodySmall)
+                        if (shizuku == ShizukuState.PERMISSION_REQUIRED) {
+                            OutlinedButton(onClick = onAuthorizeShizuku, modifier = Modifier.focusHighlight()) { Text("Authorize Shizuku") }
+                        }
+                        if (shizuku != ShizukuState.NOT_INSTALLED && shizuku != ShizukuState.UNSUPPORTED) {
+                            OutlinedButton(onClick = onOpenShizuku, modifier = Modifier.focusHighlight()) { Text("Open Shizuku") }
+                        }
+                        OutlinedButton(onClick = onShizukuHelp, modifier = Modifier.focusHighlight()) { Text("Shizuku setup help") }
+                    } else {
+                        Text(if (installAllowed) "Install permission: allowed" else "Install permission: needs setup",
+                            style = MaterialTheme.typography.titleSmall)
+                        OutlinedButton(onClick = onInstallPermission, modifier = Modifier.focusHighlight()) { Text("Install permission settings") }
+                    }
+                }
+                if (page == SiloraSettingsPage.ALL) {
+                    HorizontalDivider()
+                    PreferenceSwitch("Install updates automatically", current.autoInstallUpdates,
+                        enabled = current.checkIntervalHours > 0, onChange = onAutomaticInstall)
+                    Text(
+                        if (current.checkIntervalHours == 0) "Choose a background check schedule to enable automatic installation."
+                        else if (current.installMethod == InstallMethod.SHIZUKU)
+                            "At each background check, download newer builds and install them while Shizuku is ready. " +
+                                "Otherwise the download waits. Includes Silora Updater itself; Silora must be installed once first."
+                        else "At each background check, download newer builds and install them when Android allows it. " +
+                            "If confirmation is needed, the download waits for you. Includes Silora Updater itself; Silora must be installed once first.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    HorizontalDivider()
+                    PreferenceSwitch("Wait until playback stops", current.waitUntilPlaybackStops,
+                        enabled = current.autoInstallUpdates, onChange = onWaitUntilPlaybackStops)
+                    Text("Delay automatic Silora installation while playing or buffering. " +
+                        "Turning this off may interrupt playback. Manual installs still proceed. " +
+                        "Deferred updates retry at the next scheduled check.",
+                        style = MaterialTheme.typography.bodySmall)
+                    HorizontalDivider()
+                    Text(if (notificationsEnabled) "Update notifications: enabled" else "Update notifications: off",
                         style = MaterialTheme.typography.titleSmall)
-                    OutlinedButton(onClick = onInstallPermission, modifier = Modifier.focusHighlight()) { Text("Install permission settings") }
+                    Text("Alerts tell you about available updates and downloads waiting for confirmation. " +
+                        "Some TV launchers may not display alerts; pending updates are always shown in this app.",
+                        style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = onNotifications, modifier = Modifier.focusHighlight()) {
+                        Text(if (notificationsEnabled) "Notification settings" else "Enable notifications")
+                    }
+                    HorizontalDivider()
+                    SettingsSection("Appearance")
+                    Text("Silora violet, in light or dark. Follow your device or choose your favorite.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ThemeMode.entries.forEach { mode ->
+                        PreferenceChoice(mode.label, current.themeMode == mode) { onTheme(mode) }
+                    }
+                    PreferenceSwitch("Delete APK after installing", current.deleteApkAfterInstall, onChange = onDeleteAfterInstall)
+                    Text("Downloaded updates waiting for confirmation are kept until you install them.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = onHistory, modifier = Modifier.focusHighlight()) { Text("Update history") }
+                    OutlinedButton(onClick = onCheckSelfUpdate, modifier = Modifier.focusHighlight()) { Text("Check for updater update") }
                 }
-                HorizontalDivider()
-                PreferenceSwitch("Install updates automatically", current.autoInstallUpdates,
-                    enabled = current.checkIntervalHours > 0, onChange = onAutomaticInstall)
-                Text(
-                    if (current.checkIntervalHours == 0) "Choose a background check schedule to enable automatic installation."
-                    else if (current.installMethod == InstallMethod.SHIZUKU)
-                        "At each background check, download newer builds and install them while Shizuku is ready. " +
-                            "Otherwise the download waits. Includes Silora Updater itself; Silora must be installed once first."
-                    else "At each background check, download newer builds and install them when Android allows it. " +
-                        "If confirmation is needed, the download waits for you. Includes Silora Updater itself; Silora must be installed once first.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                HorizontalDivider()
-                PreferenceSwitch("Wait until playback stops", current.waitUntilPlaybackStops,
-                    enabled = current.autoInstallUpdates, onChange = onWaitUntilPlaybackStops)
-                Text("Delay automatic Silora installation while playing or buffering. " +
-                    "Turning this off may interrupt playback. Manual installs still proceed. " +
-                    "Deferred updates retry at the next scheduled check.",
-                    style = MaterialTheme.typography.bodySmall)
-                HorizontalDivider()
-                Text(if (notificationsEnabled) "Update notifications: enabled" else "Update notifications: off",
-                    style = MaterialTheme.typography.titleSmall)
-                Text("Alerts tell you about available updates and downloads waiting for confirmation. " +
-                    "Some TV launchers may not display alerts; pending updates are always shown in this app.",
-                    style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = onNotifications, modifier = Modifier.focusHighlight()) {
-                    Text(if (notificationsEnabled) "Notification settings" else "Enable notifications")
-                }
-                HorizontalDivider()
-                SettingsSection("Appearance")
-                Text("Silora violet, in light or dark. Follow your device or choose your favorite.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                ThemeMode.entries.forEach { mode ->
-                    PreferenceChoice(mode.label, current.themeMode == mode) { onTheme(mode) }
-                }
-                PreferenceSwitch("Delete APK after installing", current.deleteApkAfterInstall, onChange = onDeleteAfterInstall)
-                Text("Downloaded updates waiting for confirmation are kept until you install them.", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = onHistory, modifier = Modifier.focusHighlight()) { Text("Update history") }
-                OutlinedButton(onClick = onCheckSelfUpdate, modifier = Modifier.focusHighlight()) { Text("Check for updater update") }
                 Text("Silora Updater ${BuildConfig.VERSION_NAME} · Settings save immediately.", style = MaterialTheme.typography.bodySmall)
+                // Dialog content has its own composition; request focus after its rows attach.
+                LaunchedEffect(page) {
+                    if (isTv && page != SiloraSettingsPage.ALL) initialFocus.requestFocus()
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss, modifier = Modifier.focusHighlight()) { Text("Done") } },
@@ -172,8 +202,8 @@ internal fun formatCheckHour(context: Context, hour: Int): String =
     }.format(Date(hour * 3_600_000L))
 
 @Composable
-private fun PreferenceChoice(label: String, selected: Boolean, enabled: Boolean = true, onSelect: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).focusHighlight(FocusShapes.Row, scaleUp = false)
+private fun PreferenceChoice(label: String, selected: Boolean, enabled: Boolean = true, modifier: Modifier = Modifier, onSelect: () -> Unit) {
+    Row(modifier.fillMaxWidth().heightIn(min = 48.dp).focusHighlight(FocusShapes.Row, scaleUp = false)
         .selectable(selected = selected, enabled = enabled, onClick = onSelect, role = Role.RadioButton),
         verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected = selected, enabled = enabled, onClick = null, modifier = Modifier.padding(horizontal = 8.dp))

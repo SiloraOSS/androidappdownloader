@@ -54,6 +54,7 @@ class SiloraFocusAndroidTest {
                     canOpen = item.installed != null, isTv = true,
                     onInstall = {}, onCheck = {}, onOpen = {}, onCancel = {},
                     onSettings = {}, onHistory = {}, restoring = false,
+                    onBackgroundChecks = {}, onAutomaticInstall = {}, onInstallationMethod = {},
                     onInstallPermission = {}, onNotifications = {},
                 )
             }

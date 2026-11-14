@@ -3,6 +3,7 @@ package io.github.edrock200.appdownloader.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,10 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -34,6 +37,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -66,6 +71,8 @@ import io.github.edrock200.appdownloader.data.PlaybackDeferral
 import io.github.edrock200.appdownloader.data.SettingsState
 import io.github.edrock200.appdownloader.install.ShizukuState
 import java.util.Date
+
+private enum class DashboardPreference { BACKGROUND_CHECKS, AUTOMATIC_INSTALLATION, INSTALLATION_METHOD }
 
 /** Presentation only; permission handling and all update actions stay in SiloraScreen. */
 @OptIn(ExperimentalComposeUiApi::class)
@@ -85,6 +92,9 @@ internal fun SiloraDashboard(
     onOpen: () -> Unit,
     onCancel: () -> Unit,
     onSettings: () -> Unit,
+    onBackgroundChecks: () -> Unit,
+    onAutomaticInstall: (Boolean) -> Unit,
+    onInstallationMethod: () -> Unit,
     onHistory: () -> Unit,
     restoring: Boolean,
     onInstallPermission: () -> Unit,
@@ -95,13 +105,16 @@ internal fun SiloraDashboard(
     val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
     val checkFocus = remember { FocusRequester() }
     val primaryFocus = remember { FocusRequester() }
+    val preferenceFocus = remember { DashboardPreference.entries.map { FocusRequester() } }
+    var focusedPreference by rememberSaveable { mutableStateOf<DashboardPreference?>(null) }
     var preferPrimaryFocus by rememberSaveable { mutableStateOf(false) }
     val checkEnabled = item != null && !checking && !restoring && (item.op == null || item.op is OpState.Failed)
     val primaryAvailable = item != null && (canOpen || item.installed == null || item.hasUpdate || item.waiting)
     val preferredFocus = if (preferPrimaryFocus && primaryAvailable) primaryFocus else checkFocus
     // Return to the selected action after the installer or a dialog closes.
     val defaultFocus = if (isTv) Modifier.focusProperties {
-        enter = { if (checkEnabled) preferredFocus else FocusRequester.Default }
+        enter = { focusedPreference?.let { preferenceFocus[it.ordinal] }
+            ?: if (checkEnabled) preferredFocus else FocusRequester.Default }
     }.focusGroup() else Modifier
     BoxWithConstraints(modifier.then(defaultFocus).fillMaxSize().background(colors.background).background(Brush.verticalGradient(
         listOf(colors.primaryContainer.copy(alpha = 0.32f), colors.background, colors.background),
@@ -143,12 +156,15 @@ internal fun SiloraDashboard(
             val updateCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraUpdateCard(item, checking, updatingAutomatically, usingShizuku, shizuku, canOpen, isTv, compact,
                     onInstall, onCheck, onOpen, onCancel, restoring, checkFocus, primaryFocus, preferredFocus,
-                    onActionFocused = { preferPrimaryFocus = it }, playbackDeferral = playbackDeferral,
+                    onActionFocused = { preferPrimaryFocus = it; focusedPreference = null },
+                    requestActionFocus = focusedPreference == null, playbackDeferral = playbackDeferral,
                     modifier = cardModifier)
             }
             val preferencesCard: @Composable (Modifier) -> Unit = { cardModifier ->
                 SiloraPreferencesCard(settings, shizuku, installAllowed, notificationsEnabled,
-                    onSettings, onInstallPermission, onNotifications, compact, cardModifier)
+                    onInstallationMethod, onBackgroundChecks, onAutomaticInstall,
+                    onInstallPermission, onNotifications, compact, preferenceFocus,
+                    onPreferenceFocused = { focusedPreference = it }, modifier = cardModifier)
             }
             if (wide) {
                 Row(Modifier.widthIn(max = 1120.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -190,6 +206,7 @@ private fun SiloraUpdateCard(
     primaryFocus: FocusRequester,
     preferredFocus: FocusRequester,
     onActionFocused: (primary: Boolean) -> Unit,
+    requestActionFocus: Boolean,
     playbackDeferral: PlaybackDeferral?,
     modifier: Modifier = Modifier,
 ) {
@@ -203,8 +220,8 @@ private fun SiloraUpdateCard(
     val checkEnabled = item != null && !busy && !checking
     // Both actions are disabled during work. Keep the selected action through that
     // gap, including when Install/Update becomes Open or Check moves to another slot.
-    LaunchedEffect(isTv, checkEnabled, checkPrimary) {
-        if (isTv && checkEnabled) preferredFocus.requestFocus()
+    LaunchedEffect(isTv, checkEnabled, checkPrimary, requestActionFocus) {
+        if (isTv && checkEnabled && requestActionFocus) preferredFocus.requestFocus()
     }
     Card(modifier, shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = colors.surface),
@@ -361,28 +378,48 @@ private fun VersionLabel(label: String, version: String, modifier: Modifier = Mo
 @Composable
 private fun SiloraPreferencesCard(
     settings: SettingsState, shizuku: ShizukuState, installAllowed: Boolean, notificationsEnabled: Boolean,
-    onSettings: () -> Unit, onInstallPermission: () -> Unit, onNotifications: () -> Unit, compact: Boolean, modifier: Modifier = Modifier,
+    onInstallationMethod: () -> Unit, onBackgroundChecks: () -> Unit, onAutomaticInstall: (Boolean) -> Unit,
+    onInstallPermission: () -> Unit, onNotifications: () -> Unit, compact: Boolean,
+    preferenceFocus: List<FocusRequester>, onPreferenceFocused: (DashboardPreference) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val usingShizuku = settings.installMethod == InstallMethod.SHIZUKU
+    fun preferenceModifier(preference: DashboardPreference) = Modifier
+        .focusRequester(preferenceFocus[preference.ordinal])
+        .onFocusChanged { if (it.isFocused) onPreferenceFocused(preference) }
+        .focusHighlight(FocusShapes.Row, scaleUp = false)
+    val automaticInstallModifier = preferenceModifier(DashboardPreference.AUTOMATIC_INSTALLATION)
     Card(modifier, shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.outlineVariant)) {
         Column(Modifier.padding(if (compact) 20.dp else 22.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp)) {
             Text("Make it effortless.", style = MaterialTheme.typography.titleLarge)
-            if (!compact) Text("Your update preferences, at a glance.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+            if (!compact) Text("Select a preference to change it.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             PreferenceSummary(Icons.Default.Refresh, "Background checks",
                 if (settings.hasDailyCheck) "Daily at ${formatCheckHour(androidx.compose.ui.platform.LocalContext.current, settings.checkHour)}"
-                else if (settings.checkIntervalHours == 0) "Off · check when opened" else "Every ${settings.checkIntervalHours} hours")
+                else if (settings.checkIntervalHours == 0) "Off · check when opened" else "Every ${settings.checkIntervalHours} hours",
+                modifier = preferenceModifier(DashboardPreference.BACKGROUND_CHECKS).clickable(
+                    role = Role.Button, onClick = onBackgroundChecks),
+                trailing = { PreferenceArrow() })
             HorizontalDivider(color = colors.outlineVariant)
-            PreferenceSummary(Icons.Default.CheckCircle, "Automatic installation", if (settings.autoInstallUpdates) "On" else "Off")
+            PreferenceSummary(Icons.Default.CheckCircle, "Automatic installation", if (settings.autoInstallUpdates) "On" else "Off",
+                modifier = if (settings.checkIntervalHours > 0) automaticInstallModifier.toggleable(
+                    value = settings.autoInstallUpdates, role = Role.Switch, onValueChange = onAutomaticInstall)
+                else automaticInstallModifier.clickable(role = Role.Button, onClick = onBackgroundChecks),
+                supportingText = if (settings.checkIntervalHours == 0) "Choose a background schedule first." else null,
+                trailing = { Switch(checked = settings.autoInstallUpdates, onCheckedChange = null,
+                    enabled = settings.checkIntervalHours > 0) })
             HorizontalDivider(color = colors.outlineVariant)
-            PreferenceSummary(Icons.Default.Settings, "Installation method", settings.installMethod.label)
+            PreferenceSummary(Icons.Default.Settings, "Installation method", settings.installMethod.label,
+                modifier = preferenceModifier(DashboardPreference.INSTALLATION_METHOD).clickable(
+                    role = Role.Button, onClick = onInstallationMethod),
+                trailing = { PreferenceArrow() })
             if (usingShizuku) {
                 Text("Shizuku: ${shizuku.label}", style = MaterialTheme.typography.titleSmall,
                     color = if (shizuku.ready) colors.tertiary else colors.onSurface)
                 if (!shizuku.ready) {
                     Text(shizuku.help, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                    OutlinedButton(onClick = onSettings, modifier = Modifier.focusHighlight()) { Text("Set up Shizuku") }
+                    OutlinedButton(onClick = onInstallationMethod, modifier = Modifier.focusHighlight()) { Text("Set up Shizuku") }
                 }
             } else if (settings.autoInstallUpdates && !installAllowed) {
                 Text("Allow installs so automatic updates can finish. Downloads can wait for your confirmation.",
@@ -402,8 +439,12 @@ private fun SiloraPreferencesCard(
 }
 
 @Composable
-private fun PreferenceSummary(icon: ImageVector, label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun PreferenceSummary(
+    icon: ImageVector, label: String, value: String, modifier: Modifier,
+    supportingText: String? = null, trailing: @Composable () -> Unit,
+) {
+    Row(modifier.fillMaxWidth().heightIn(min = 56.dp).padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.padding(10.dp).size(18.dp))
@@ -411,6 +452,15 @@ private fun PreferenceSummary(icon: ImageVector, label: String, value: String) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleSmall)
+            supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+        trailing()
     }
+}
+
+@Composable
+private fun PreferenceArrow() {
+    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
 }

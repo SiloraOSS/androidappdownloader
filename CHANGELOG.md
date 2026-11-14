@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Change background checks, automatic installation, and the installation method directly
+  from Make it effortless. Schedule and installer pickers include the same setup options as Settings.
+
 ### Fixed
 - Keep the selected Past installs entry's date and description visible when TV remote focus
   scrolls a long history list to its Restore button.

@@ -66,6 +66,11 @@ opened/manually, or **Custom** for a daily check at a chosen hour. Selecting Cus
 **Daily check time** with −/+ hour controls that work with a TV remote. Times use the device's
 local time zone and 12/24-hour display preference; the home screen shows the saved daily time.
 Late checks do not shift the following day's chosen hour.
+The **Make it effortless** section also lets you change these preferences directly. Select
+**Background checks** for the schedule picker, use the **Automatic installation** switch, or
+select **Installation method** for Standard/Shizuku choices and setup. With background checks
+off, selecting automatic installation opens the schedule picker; choose a schedule, then
+explicitly turn automatic installation on. Settings and the home screen share the same saved values.
 **Install updates automatically** is a separate, persistent switch (on by default); when on, each background check downloads newer builds of Silora and Silora Updater and attempts installation using the selected installer. Silora is handled first because updating the updater closes its process.
 Choosing manual-only checks also turns automatic installation off. First install is always manual.
 **Settings → Wait until playback stops** is enabled by default and saved on this device. It is
