@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-11-14
+
 ### Added
 - Change background checks, automatic installation, and the installation method directly
   from Make it effortless. Schedule and installer pickers include the same setup options as Settings.
