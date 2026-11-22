@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-22
+
+### Changed
+- Verify Silora and Updater downloads against GitHub's published file size and SHA-256 when
+  available. This also covers APKs downloaded again from Past installs.
+- Retry a verified download when playback blocks an automatic install, starting after 15 minutes
+  with up to three checks. An unexpected Android confirmation gets one delayed install retry if
+  the device still qualifies. Your regular check schedule keeps its cadence.
+
+### Fixed
+- Keep downloaded updates ready if Android's install prompt is interrupted. Recover unfinished
+  Standard or Shizuku installs and record successful installs without letting an older callback
+  interrupt a newer attempt.
+- Check Android's silent-install requirements before starting a Standard background install,
+  and avoid repeatedly attempting a build that Android permanently rejected.
+- Retry update checks after temporary network failures, respect GitHub rate limits, and continue
+  checking public releases if a saved GitHub token is rejected.
+- Show the download-ready prompt once per Silora build. The dashboard still offers Install update
+  after you choose Later.
+
 ## [1.1.0] - 2026-11-21
 
 ### Changed
