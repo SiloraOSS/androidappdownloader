@@ -35,7 +35,8 @@ class InstallRestoreStore(context: Context) {
     private val stateFile = AtomicFile(File(directory, "pending.json"))
     val apk = File(directory, "selected.apk")
     private val archive = File(context.cacheDir, "installed-apks")
-    private val downloadDirectory = File(context.cacheDir, "apks")
+    private val cachedApks = File(context.cacheDir, "apks")
+    val downloadDirectory = File(directory, "download")
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun load(): PendingInstallRestore? = try {
@@ -57,12 +58,13 @@ class InstallRestoreStore(context: Context) {
     fun clear() {
         stateFile.delete()
         apk.delete()
+        downloadDirectory.deleteRecursively()
         File(directory, "download.part").delete()
         File(directory, "download.apk").delete()
     }
 
     fun localApk(record: InstallRecord): File? = record.apkPath?.let(::File)?.takeIf { file ->
-        file.isFile && listOf(archive, downloadDirectory).any { file.canonicalFile.parentFile == it.canonicalFile }
+        file.isFile && listOf(archive, cachedApks).any { file.canonicalFile.parentFile == it.canonicalFile }
     }
 
     fun stage(source: File) {

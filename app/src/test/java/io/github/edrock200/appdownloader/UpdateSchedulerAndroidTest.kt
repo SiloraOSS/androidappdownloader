@@ -71,4 +71,17 @@ class UpdateSchedulerAndroidTest {
         assertTrue(manager.getWorkInfosForUniqueWork("github-update-check").get(10, TimeUnit.SECONDS)
             .all { it.state == WorkInfo.State.CANCELLED })
     }
+
+    @Test fun dailyRetryUsesExplicitTimeThenReturnsToTheLocalHour() {
+        val state = SettingsState(checkIntervalHours = 24, checkDaily = true, checkHour = 19)
+        apply(state)
+        val id = active().id
+        val retryAt = System.currentTimeMillis() + 30 * 60_000L
+        UpdateScheduler.schedule(context, state, retryAt = retryAt).result.get(10, TimeUnit.SECONDS)
+        assertEquals(id, active().id)
+        assertEquals(retryAt, active().nextScheduleTimeMillis)
+        apply(state)
+        assertEquals(id, active().id)
+        assertEquals(Schedule.nextDailyCheck(19, System.currentTimeMillis()), active().nextScheduleTimeMillis)
+    }
 }

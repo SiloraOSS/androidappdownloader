@@ -2,6 +2,7 @@ package io.github.edrock200.appdownloader.data
 
 import io.github.edrock200.appdownloader.net.RemoteChange
 import io.github.edrock200.appdownloader.net.RemoteFingerprint
+import io.github.edrock200.appdownloader.install.InstallAttempt
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -39,6 +40,8 @@ data class AppEntry(
     val latestReleaseNotes: String? = null,
     val latestAssetName: String? = null,
     val latestAssetUrl: String? = null,
+    val latestAssetSize: Long? = null,
+    val latestAssetDigest: String? = null,
     val latestPublishedAt: String? = null,
     /** Android version from Silora's release metadata, independent of its date-based tag. */
     val latestVersionCode: Long? = null,
@@ -61,6 +64,9 @@ data class AppEntry(
     val readyVersionCode: Long? = null,
     /** Release tag of [readyFile], for GitHub entries. */
     val readyTag: String? = null,
+    val readySha256: String? = null,
+    val installAttempt: InstallAttempt? = null,
+    val backgroundInstallBlock: BackgroundInstallBlock? = null,
     /** Why the last automatic install attempt waited; cleared when the APK is replaced or installed. */
     val playbackDeferral: PlaybackDeferral? = null,
 
@@ -79,4 +85,17 @@ data class AppEntry(
 
     /** Installs and updates of this app on this device, newest first (see [History]). */
     val history: List<InstallRecord> = emptyList(),
+)
+
+/** A staged build the selected installer has already refused or asked the user to confirm. */
+@Serializable
+data class BackgroundInstallBlock(
+    val versionCode: Long,
+    val tag: String?,
+    val method: InstallMethod,
+    val installedVersionCode: Long?,
+    val sha256: String?,
+    val needsConfirmation: Boolean,
+    /** Cleared before submitting the only automatic retry for a confirmation request. */
+    val confirmationRetryPending: Boolean = false,
 )

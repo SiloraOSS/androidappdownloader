@@ -120,9 +120,13 @@ fun SiloraScreen(vm: MainViewModel) {
     LaunchedEffect(firstRunStep, notificationsEnabled) {
         if (firstRunStep == FirstRunStep.NOTIFICATIONS && notificationsEnabled) finishFirstRun()
     }
-    LaunchedEffect(firstRunActive, requestingNotifications, item?.waiting, item?.op) {
-        if (!firstRunActive && !requestingNotifications && item?.waiting == true && item.op == null && !vm.waitingPromptShown) {
-            vm.waitingPromptShown = true
+    val readyVersion = item?.entry?.readyVersionCode?.takeIf {
+        item.waiting && item.op == null && item.entry.playbackDeferral == null
+    }
+    LaunchedEffect(firstRunActive, requestingNotifications, showSettings, showInstallPermission, restore.active, readyVersion) {
+        if (readyVersion == null) showWaiting = false
+        else if (!firstRunActive && !requestingNotifications && !showSettings && !showInstallPermission &&
+            !restore.active && vm.markReadyPromptShown(readyVersion)) {
             showWaiting = true
         }
     }
@@ -301,9 +305,10 @@ fun SiloraScreen(vm: MainViewModel) {
             }, onCancel = vm::cancelInstallRestore, onSettings = { settingsPage = SiloraSettingsPage.ALL })
     }
     if (!firstRunActive && !requestingNotifications && showWaiting && item?.waiting == true && !restore.active) {
-        AlertDialog(onDismissRequest = { showWaiting = false }, title = { Text("Silora update ready") },
-            text = { Text(if (usingShizuku) "A background update is downloaded. ${shizuku.help} Choose Install update when ready."
-                else "A background update was downloaded and needs your confirmation to install.") },
+        AlertDialog(onDismissRequest = { showWaiting = false },
+            title = { Text(if (item.installed == null) "Silora ready to install" else "Silora update ready") },
+            text = { Text(if (usingShizuku && !shizuku.ready) "An update is downloaded. ${shizuku.help}"
+                else "The update is downloaded. Choose Install update to finish.") },
             confirmButton = { TextButton(onClick = { showWaiting = false; install() }, modifier = Modifier.focusHighlight()) { Text("Install update") } },
             dismissButton = { TextButton(onClick = { showWaiting = false }, modifier = Modifier.focusHighlight()) { Text("Later") } },
         )

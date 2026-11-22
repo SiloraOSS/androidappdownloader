@@ -26,6 +26,7 @@ class ShizukuDeviceCheck : Instrumentation() {
     private var standardInstall = false
     private var automaticUpdateCheck = false
     private var expectedPlayback: String? = null
+    private var reliabilityCheck: String? = null
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -37,6 +38,7 @@ class ShizukuDeviceCheck : Instrumentation() {
         standardInstall = arguments?.getString("installer") == "standard"
         automaticUpdateCheck = arguments?.getString("automaticUpdateCheck") == "true"
         expectedPlayback = arguments?.getString("expectedPlayback")
+        reliabilityCheck = arguments?.getString("reliabilityCheck")
         start()
     }
 
@@ -47,6 +49,10 @@ class ShizukuDeviceCheck : Instrumentation() {
             runOnMainSync { }
             runBlocking {
                 val app = targetContext.app()
+                reliabilityCheck?.let { check ->
+                    UpdaterReliabilityDeviceCheck.run(app, check, output)
+                    return@runBlocking
+                }
                 if (playbackOnly) {
                     val started = android.os.SystemClock.elapsedRealtime()
                     val status = io.github.edrock200.appdownloader.install.SiloraMediaSession(app).read()
@@ -147,6 +153,7 @@ class ShizukuDeviceCheck : Instrumentation() {
                 }
                 val marker = File(app.filesDir, "self-update-device-check-start")
                 if (runMonitoringNow) {
+                    restoreInstallerAfterSelfCheck(app, marker)
                     val state = app.settings.current
                     check(state.checkIntervalHours > 0) { "Background checks are disabled" }
                     // Advance one occurrence of the EXISTING periodic work. ADB's JobScheduler
@@ -163,13 +170,14 @@ class ShizukuDeviceCheck : Instrumentation() {
                     return@runBlocking
                 }
                 if (verifySelfRecovery) {
-                    val (startedAt, targetCode) = marker.readLines().map(String::toLong)
-                    check(BuildConfig.VERSION_CODE.toLong() == targetCode) { "The newer updater was not installed" }
+                    val (startedAt, targetCode) = marker.readLines()
+                    check(BuildConfig.VERSION_CODE.toLong() == targetCode.toLong()) { "The newer updater was not installed" }
+                    restoreInstallerAfterSelfCheck(app, marker)
                     val self = io.github.edrock200.appdownloader.data.SelfUpdateStore(app).current
                     val player = app.repository.get(Silora.ID)!!
                     check(self.readyFile == null) { "The completed self-update is still pending" }
                     for (entry in listOf(player, self)) {
-                        check((entry.lastCheckedAt ?: 0) >= startedAt && entry.lastCheckError == null) {
+                        check((entry.lastCheckedAt ?: 0) >= startedAt.toLong() && entry.lastCheckError == null) {
                             "${entry.name} did not successfully check GitHub after the upgrade: ${entry.lastCheckError}"
                         }
                     }
@@ -193,16 +201,20 @@ class ShizukuDeviceCheck : Instrumentation() {
                     val tag = "v${info.versionName}"
                     check(io.github.edrock200.appdownloader.data.SiloraUpdater.versionCode(tag) == info.versionCode)
                     val cached = File(app.cacheDir, "self-update-device-check.apk")
-                    withContext(Dispatchers.IO) { source.copyTo(cached, overwrite = true) }
+                    val sha256 = withContext(Dispatchers.IO) {
+                        source.copyTo(cached, overwrite = true)
+                        io.github.edrock200.appdownloader.install.InstallRestoreStore.sha256(cached)
+                    }
                     io.github.edrock200.appdownloader.data.SelfUpdateStore(app).update {
                         it.copy(latestTag = tag, latestVersionCode = info.versionCode,
                             latestAssetUrl = "https://github.com/${BuildConfig.UPDATE_REPO}/releases/download/$tag/SiloraUpdater-tv.apk",
+                            latestAssetSize = cached.length(), latestAssetDigest = "sha256:$sha256",
                             readyFile = cached.absolutePath, readyVersionCode = info.versionCode,
-                            readyVersionName = info.versionName, readyTag = tag)
+                            readyVersionName = info.versionName, readyTag = tag, readySha256 = sha256)
                     }
+                    marker.writeText("${System.currentTimeMillis()}\n${info.versionCode}\n${app.settings.current.installMethod.name}")
                     app.settings.update(app.settings.current.copy(
                         installMethod = io.github.edrock200.appdownloader.data.InstallMethod.SHIZUKU))
-                    marker.writeText("${System.currentTimeMillis()}\n${info.versionCode}")
                     // Recreate the production controller from its durable state, as on an offline launch.
                     val controller = AppController(app, app.repository, app.settings, app.scope)
                     // Install callbacks must reach this same recreated coordinator.
@@ -283,6 +295,15 @@ class ShizukuDeviceCheck : Instrumentation() {
             output.putString("result", "FAIL: ${error.message}")
             output.putString("error", error.stackTraceToString().take(8000))
             finish(0, output)
+        }
+    }
+
+    private fun restoreInstallerAfterSelfCheck(app: App, marker: File) {
+        if (!marker.isFile) return
+        val savedMethod = marker.readLines().getOrNull(2)
+            ?.let(io.github.edrock200.appdownloader.data.InstallMethod::valueOf) ?: return
+        if (app.settings.current.installMethod != savedMethod) {
+            app.settings.update(app.settings.current.copy(installMethod = savedMethod))
         }
     }
 

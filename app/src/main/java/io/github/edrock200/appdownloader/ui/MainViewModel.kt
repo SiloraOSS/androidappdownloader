@@ -80,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Whether the "updates are waiting" prompt was already shown since the app was opened. */
     var waitingPromptShown = false
+    fun markReadyPromptShown(version: Long) = app.settings.markReadyPromptShown(version)
     val settings = app.settings.state
     val shizukuStatus = app.shizuku.state
     fun refreshShizuku() = app.shizuku.refresh()

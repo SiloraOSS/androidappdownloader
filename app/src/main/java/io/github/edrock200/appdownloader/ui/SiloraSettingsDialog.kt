@@ -161,7 +161,7 @@ fun SiloraSettingsDialog(
                         enabled = current.autoInstallUpdates, onChange = onWaitUntilPlaybackStops)
                     Text("Delay automatic Silora installation while playing or buffering. " +
                         "Turning this off may interrupt playback. Manual installs still proceed. " +
-                        "Deferred updates retry at the next scheduled check.",
+                        "Deferred updates get a few automatic retries between scheduled checks.",
                         style = MaterialTheme.typography.bodySmall)
                     HorizontalDivider()
                     Text(if (notificationsEnabled) "Update notifications: enabled" else "Update notifications: off",

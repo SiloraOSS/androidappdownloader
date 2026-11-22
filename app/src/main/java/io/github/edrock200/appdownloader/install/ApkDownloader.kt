@@ -1,6 +1,7 @@
 package io.github.edrock200.appdownloader.install
 
 import io.github.edrock200.appdownloader.net.Http
+import io.github.edrock200.appdownloader.net.GitHubRetryException
 import io.github.edrock200.appdownloader.net.RemoteFingerprint
 import io.github.edrock200.appdownloader.net.RemoteProbe
 import kotlinx.coroutines.Dispatchers
@@ -11,10 +12,22 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.net.URLDecoder
+import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
 /** Thrown when a link leads to a web page with no APK on it. */
 class NotAnApkException(message: String, val pageUrl: String) : IOException(message)
+
+data class ExpectedApk(val size: Long?, val digest: String?) {
+    fun verify(bytes: Long, sha256: String) {
+        if (size != null && size > 0 && bytes != size) {
+            throw IOException("The download has $bytes bytes, but GitHub lists $size. Try again.")
+        }
+        if (digest != null && !digest.equals("sha256:$sha256", ignoreCase = true)) {
+            throw IOException("The download does not match GitHub's SHA-256 checksum. Try again.")
+        }
+    }
+}
 
 object ApkDownloader {
 
@@ -24,6 +37,7 @@ object ApkDownloader {
         val fileName: String,
         /** Server details of the downloaded file, for later change checks. */
         val fingerprint: RemoteFingerprint?,
+        val sha256: String,
     )
 
     private val APK_LINK = Regex(
@@ -40,20 +54,34 @@ object ApkDownloader {
         url: String,
         dir: File,
         baseName: String,
+        expected: ExpectedApk? = null,
         onProgress: (Float?) -> Unit,
-    ): Result = withContext(Dispatchers.IO) {
-        downloadInternal(url, dir, baseName, onProgress, allowPageScan = true)
+    ): Result {
+        var result: Result? = null
+        try {
+            return withContext(Dispatchers.IO) {
+                downloadInternal(url, dir, baseName, expected, onProgress, allowPageScan = expected == null)
+                    .also { result = it }
+            }
+        } catch (e: Exception) {
+            result?.file?.delete()
+            throw e
+        }
     }
 
     private suspend fun downloadInternal(
         url: String,
         dir: File,
         baseName: String,
+        expected: ExpectedApk?,
         onProgress: (Float?) -> Unit,
         allowPageScan: Boolean,
     ): Result {
         val request = Request.Builder().url(url).get().build()
         Http.execute(request).use { response ->
+            if (expected != null && response.code in 500..599) {
+                throw GitHubRetryException("GitHub's download is temporarily unavailable (HTTP ${response.code})")
+            }
             if (!response.isSuccessful) throw IOException("Download failed: HTTP ${response.code}")
             val body = response.body ?: throw IOException("Download failed: empty response")
             val finalUrl = response.request.url.toString()
@@ -66,7 +94,7 @@ object ApkDownloader {
                 }
                 val apkUrl = if (allowPageScan) findApkLink(html, finalUrl) else null
                 if (apkUrl != null) {
-                    return downloadInternal(apkUrl, dir, baseName, onProgress, allowPageScan = false)
+                    return downloadInternal(apkUrl, dir, baseName, expected, onProgress, allowPageScan = false)
                 }
                 throw NotAnApkException("This link opens a web page, not an APK file.", finalUrl)
             }
@@ -77,46 +105,56 @@ object ApkDownloader {
                 fileName.endsWith(".apks", true) -> "apks"
                 else -> "apk"
             }
-            dir.mkdirs()
-            val part = File(dir, "$baseName.part")
-            val total = body.contentLength().takeIf { it > 0 }
-            onProgress(if (total != null) 0f else null)
-
-            body.byteStream().use { input ->
-                part.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var done = 0L
-                    var lastReport = 0L
-                    while (true) {
-                        coroutineContext.ensureActive()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        done += read
-                        if (total != null && done - lastReport > 256 * 1024) {
-                            lastReport = done
-                            onProgress((done.toFloat() / total).coerceIn(0f, 1f))
+            if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Could not create the download folder")
+            val total = expected?.size?.takeIf { it > 0 } ?: body.contentLength().takeIf { it > 0 }
+            if (total != null && dir.usableSpace / 2 < total) {
+                throw IOException("Not enough storage for the download and Android's installation copy")
+            }
+            val part = File.createTempFile("$baseName-", ".part", dir)
+            try {
+                onProgress(if (total != null) 0f else null)
+                val digest = MessageDigest.getInstance("SHA-256")
+                var done = 0L
+                body.byteStream().use { input ->
+                    part.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var lastReport = 0L
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            done += read
+                            if (expected?.size?.let { it > 0 && done > it } == true) {
+                                throw IOException("The download is larger than the file GitHub published")
+                            }
+                            output.write(buffer, 0, read)
+                            digest.update(buffer, 0, read)
+                            if (total != null && done - lastReport > 256 * 1024) {
+                                lastReport = done
+                                onProgress((done.toFloat() / total).coerceIn(0f, 1f))
+                            }
                         }
                     }
                 }
-            }
-            if (!looksLikeZip(part)) {
+                coroutineContext.ensureActive()
+                val sha256 = digest.digest().joinToString("") { "%02x".format(it) }
+                expected?.verify(done, sha256)
+                if (!looksLikeZip(part)) throw NotAnApkException("The downloaded file is not an APK.", finalUrl)
+                val fingerprint = RemoteProbe.fromHeaders(
+                    contentType = response.header("Content-Type"),
+                    etag = response.header("ETag"),
+                    lastModified = response.header("Last-Modified"),
+                    contentLength = done.toString(),
+                    contentRange = null,
+                    finalUrl = finalUrl,
+                )
+                onProgress(1f)
+                val dest = File(dir, "${part.nameWithoutExtension}.$ext")
+                if (!part.renameTo(dest)) throw IOException("Could not save the downloaded file")
+                return Result(dest, finalUrl, fileName, fingerprint, sha256)
+            } finally {
                 part.delete()
-                throw NotAnApkException("The downloaded file is not an APK.", finalUrl)
             }
-            val dest = File(dir, "$baseName.$ext")
-            dest.delete()
-            if (!part.renameTo(dest)) throw IOException("Could not save the downloaded file")
-            onProgress(1f)
-            val fingerprint = RemoteProbe.fromHeaders(
-                contentType = response.header("Content-Type"),
-                etag = response.header("ETag"),
-                lastModified = response.header("Last-Modified"),
-                contentLength = dest.length().toString(),
-                contentRange = null,
-                finalUrl = finalUrl,
-            )
-            return Result(dest, finalUrl, fileName, fingerprint)
         }
     }
 

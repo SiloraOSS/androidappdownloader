@@ -16,6 +16,7 @@ data class ApkInfo(
     val label: String?,
     /** Zip entries to install for split bundles (.xapk / .apks); empty for a plain APK. */
     val splitEntries: List<String>,
+    val targetSdk: Int = 0,
 ) {
     val isSplit get() = splitEntries.isNotEmpty()
 }
@@ -35,7 +36,7 @@ object ApkInspector {
 
         // Read the package details from the base split.
         val baseName = splits.firstOrNull { it.substringAfterLast('/').startsWith("base") } ?: splits.first()
-        val tmp = File(context.cacheDir, "inspect-base.apk")
+        val tmp = File.createTempFile("inspect-", ".apk", context.cacheDir)
         try {
             ZipFile(file).use { zip ->
                 zip.getInputStream(zip.getEntry(baseName)).use { input ->
@@ -79,6 +80,7 @@ object ApkInspector {
             versionCode = PackageInfoCompat.getLongVersionCode(info),
             label = label,
             splitEntries = splits,
+            targetSdk = info.applicationInfo?.targetSdkVersion ?: 0,
         )
     }
 }

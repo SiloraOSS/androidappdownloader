@@ -24,6 +24,7 @@ data class InstallRecord(
     val apkPath: String? = null,
     /** Identifies the exact installed file even if a release asset is later replaced. */
     val apkSha256: String? = null,
+    val attemptId: String? = null,
 )
 
 /** Rules for an app's update history (pure, for tests). */
@@ -42,6 +43,7 @@ object History {
 
     /** Adds an install App Downloader just did. Newest first; at most [MAX_RECORDS]. */
     fun recordInstall(history: List<InstallRecord>, record: InstallRecord): List<InstallRecord> {
+        if (record.attemptId != null && history.any { it.attemptId == record.attemptId }) return history
         val last = history.firstOrNull()
         // The same install may already have been noticed on the device a moment earlier.
         val rest = if (last != null && !last.byApp && last.versionCode == record.versionCode &&

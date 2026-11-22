@@ -10,6 +10,7 @@ import io.github.edrock200.appdownloader.work.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class App : Application() {
 
@@ -31,6 +32,7 @@ class App : Application() {
         controller = AppController(this, repository, settings, scope)
         Notifications.createChannel(this)
         UpdateScheduler.schedule(this, settings.current, keepExisting = true)
+        scope.launch { controller.resumeConfirmationRetries() }
     }
 }
 

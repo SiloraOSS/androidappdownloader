@@ -1,7 +1,9 @@
 package io.github.edrock200.appdownloader.data
 
 import android.content.Context
+import android.util.AtomicFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +18,7 @@ import io.github.edrock200.appdownloader.ui.Device
 /** Stores the saved entries as a JSON file in the app's private storage. */
 class EntryRepository(context: Context) {
 
-    private val file = File(context.filesDir, "entries.json")
+    private val file = AtomicFile(File(context.filesDir, "entries.json"))
     private val isTv = Device.isTv(context)
     private val mutex = Mutex()
     private val serializer = ListSerializer(AppEntry.serializer())
@@ -38,22 +40,27 @@ class EntryRepository(context: Context) {
 
     private suspend fun mutate(block: (List<AppEntry>) -> List<AppEntry>) = mutex.withLock {
         val updated = Silora.entries(block(_entries.value), isTv, get(Silora.ID))
-        _entries.value = updated
-        withContext(Dispatchers.IO) { save(updated) }
+        if (updated != _entries.value) withContext(NonCancellable) {
+            withContext(Dispatchers.IO) { save(updated) }
+            _entries.value = updated
+        }
     }
 
     private fun load(): List<AppEntry> = try {
-        if (file.exists()) JSON.decodeFromString(serializer, file.readText()) else emptyList()
+        file.openRead().bufferedReader().use { JSON.decodeFromString(serializer, it.readText()) }
     } catch (e: Exception) {
         emptyList()
     }
 
     private fun save(list: List<AppEntry>) {
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.writeText(JSON.encodeToString(serializer, list))
-        if (!tmp.renameTo(file)) {
-            file.writeText(tmp.readText())
-            tmp.delete()
+        val bytes = JSON.encodeToString(serializer, list).toByteArray(Charsets.UTF_8)
+        val output = file.startWrite()
+        try {
+            output.write(bytes)
+            file.finishWrite(output)
+        } catch (e: Exception) {
+            file.failWrite(output)
+            throw e
         }
     }
 

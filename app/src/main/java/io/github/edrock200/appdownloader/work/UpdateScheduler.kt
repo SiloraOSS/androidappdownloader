@@ -13,7 +13,12 @@ import java.util.concurrent.TimeUnit
 object UpdateScheduler {
     private const val WORK_NAME = "github-update-check"
 
-    fun schedule(context: Context, state: SettingsState, keepExisting: Boolean = false): androidx.work.Operation {
+    fun schedule(
+        context: Context,
+        state: SettingsState,
+        keepExisting: Boolean = false,
+        retryAt: Long? = null,
+    ): androidx.work.Operation {
         val wm = WorkManager.getInstance(context)
         if (state.checkIntervalHours <= 0) {
             return wm.cancelUniqueWork(WORK_NAME)
@@ -22,7 +27,9 @@ object UpdateScheduler {
             if (state.hasDailyCheck) 24L else state.checkIntervalHours.toLong(), TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .apply {
-                if (state.hasDailyCheck) {
+                if (retryAt != null) {
+                    setNextScheduleTimeOverride(retryAt)
+                } else if (state.hasDailyCheck) {
                     setNextScheduleTimeOverride(Schedule.nextDailyCheck(state.checkHour, System.currentTimeMillis()))
                 } else {
                     setInitialDelay(15, TimeUnit.MINUTES)

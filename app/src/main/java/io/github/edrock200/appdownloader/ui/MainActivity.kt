@@ -49,8 +49,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        (application as App).controller.setInstallConfirmationHost { startActivity(it) }
         // Apps may have been installed/removed while we were away.
         viewModel.refreshInstalled()
+    }
+
+    override fun onPause() {
+        (application as App).controller.setInstallConfirmationHost(null)
+        super.onPause()
     }
 
 }

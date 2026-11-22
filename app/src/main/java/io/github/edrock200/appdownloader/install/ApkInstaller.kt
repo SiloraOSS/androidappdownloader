@@ -22,11 +22,13 @@ object ApkInstaller {
     const val EXTRA_KEEP_DOWNLOAD = "keep_download"
     const val EXTRA_SHIZUKU = "shizuku_result"
     const val EXTRA_RESTORE_ATTEMPT = "restore_attempt"
+    const val EXTRA_ATTEMPT = "install_attempt"
+    const val EXTRA_VERSION_NAME = "version_name"
     /** Version on the device before this install (for the update history); absent if not installed. */
     const val EXTRA_PREV_VERSION_NAME = "prev_version_name"
     const val EXTRA_PREV_VERSION_CODE = "prev_version_code"
 
-    fun install(
+    suspend fun install(
         context: Context,
         file: File,
         info: ApkInfo,
@@ -36,14 +38,13 @@ object ApkInstaller {
         previousVersionName: String? = null,
         previousVersionCode: Long? = null,
         restoreAttemptId: String? = null,
+        attemptId: String? = null,
+        onSessionCreated: suspend (Int) -> Unit = {},
     ) {
         val installer = context.packageManager.packageInstaller
-        // Drop earlier sessions for the same app that were never confirmed.
-        installer.mySessions.filter { it.appPackageName == info.packageName }.forEach {
-            runCatching { installer.abandonSession(it.sessionId) }
-        }
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(info.packageName)
+            if (!info.isSplit) setSize(file.length())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 setInstallReason(PackageManager.INSTALL_REASON_USER)
             }
@@ -53,31 +54,32 @@ object ApkInstaller {
             }
         }
         val sessionId = installer.createSession(params)
-        val session = installer.openSession(sessionId)
         try {
-            if (info.isSplit) {
-                ZipFile(file).use { zip ->
-                    info.splitEntries.forEachIndexed { index, name ->
-                        val entry = zip.getEntry(name)
-                        val splitName = "${index}_" + name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        session.openWrite(splitName, 0, entry.size).use { out ->
-                            zip.getInputStream(entry).use { it.copyTo(out) }
-                            session.fsync(out)
+            onSessionCreated(sessionId)
+            installer.openSession(sessionId).use { session ->
+                if (info.isSplit) {
+                    ZipFile(file).use { zip ->
+                        info.splitEntries.forEachIndexed { index, name ->
+                            val entry = zip.getEntry(name)
+                            val splitName = "${index}_" + name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+                            session.openWrite(splitName, 0, entry.size).use { out ->
+                                zip.getInputStream(entry).use { it.copyTo(out) }
+                                session.fsync(out)
+                            }
                         }
                     }
+                } else {
+                    session.openWrite("base.apk", 0, file.length()).use { out ->
+                        file.inputStream().use { it.copyTo(out) }
+                        session.fsync(out)
+                    }
                 }
-            } else {
-                session.openWrite("base.apk", 0, file.length()).use { out ->
-                    file.inputStream().use { it.copyTo(out) }
-                    session.fsync(out)
-                }
+                session.commit(resultCallback(context, sessionId, file, info, entryId, releaseTag, background,
+                    previousVersionName, previousVersionCode, restoreAttemptId = restoreAttemptId,
+                    attemptId = attemptId).intentSender)
             }
-
-            session.commit(resultCallback(context, sessionId, file, info, entryId, releaseTag, background,
-                previousVersionName, previousVersionCode, restoreAttemptId = restoreAttemptId).intentSender)
-            session.close()
         } catch (e: Exception) {
-            session.abandon()
+            runCatching { installer.abandonSession(sessionId) }
             throw e
         }
     }
@@ -88,6 +90,7 @@ object ApkInstaller {
         background: Boolean, previousVersionName: String?, previousVersionCode: Long?,
         viaShizuku: Boolean = false,
         restoreAttemptId: String? = null,
+        attemptId: String? = null,
     ): PendingIntent {
         val callback = Intent(context, InstallResultReceiver::class.java)
             .setData(android.net.Uri.parse("silora-updater://install/${java.util.UUID.randomUUID()}"))
@@ -102,6 +105,8 @@ object ApkInstaller {
             .putExtra(EXTRA_SHIZUKU, viaShizuku)
             .putExtra(EXTRA_KEEP_DOWNLOAD, viaShizuku)
             .putExtra(EXTRA_RESTORE_ATTEMPT, restoreAttemptId)
+            .putExtra(EXTRA_ATTEMPT, attemptId)
+            .putExtra(EXTRA_VERSION_NAME, info.versionName)
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (viaShizuku && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags = flags or PendingIntent.FLAG_IMMUTABLE
         else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags = flags or PendingIntent.FLAG_MUTABLE

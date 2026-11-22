@@ -93,6 +93,13 @@ class Settings(context: Context) {
         prefs.edit().putBoolean("notification_permission_asked", true).apply()
     }
 
+    fun markReadyPromptShown(version: Long): Boolean {
+        val key = "silora_ready_prompt_version"
+        if (prefs.getLong(key, -1) == version) return false
+        prefs.edit().putLong(key, version).apply()
+        return true
+    }
+
     /** Null means no request; false means setup only; true requires an explicit Continue to install. */
     val pendingInstallAfterPermission: Boolean?
         get() = if (prefs.contains(KEY_INSTALL_PERMISSION_REQUEST)) {

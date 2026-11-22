@@ -5,14 +5,16 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import io.github.edrock200.appdownloader.app
 import io.github.edrock200.appdownloader.data.Schedule
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Runs at the user's scheduled time and updates every app that has auto-update switched on. */
 class AutoUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = withContext(Dispatchers.Main.immediate) {
         val app = applicationContext.app()
         val settings = app.settings.current
-        if (!settings.hasSchedule) return Result.success() // Turned off after this run was queued.
+        if (!settings.hasSchedule) return@withContext Result.success() // Turned off after this run was queued.
 
         val summary = app.controller.updateSelected(interactive = false)
 
@@ -27,6 +29,6 @@ class AutoUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         Notifications.showWaitingUpdates(applicationContext, app.controller.waitingUpdates())
         Notifications.showUpdateFailures(applicationContext, summary.failed)
-        return Result.success()
+        Result.success()
     }
 }

@@ -3,6 +3,7 @@ package io.github.edrock200.appdownloader.net
 import io.github.edrock200.appdownloader.data.AppEntry
 import io.github.edrock200.appdownloader.data.Silora
 import io.github.edrock200.appdownloader.data.SiloraUpdater
+import io.github.edrock200.appdownloader.install.ExpectedApk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -10,15 +11,29 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 @Serializable
 data class GhAsset(
     val name: String,
     @SerialName("browser_download_url") val downloadUrl: String,
     val size: Long = 0,
-)
+    val digest: String? = null,
+) {
+    val expectedApk get() = ExpectedApk(size.takeIf { it > 0 }, digest)
+}
+
+class GitHubRetryException(message: String, val retryAt: Long? = null) : IOException(message) {
+    companion object {
+        fun isRetryable(error: Exception): Boolean = error is GitHubRetryException ||
+            error is UnknownHostException || error is SocketTimeoutException || error is SocketException
+    }
+}
 
 @Serializable
 data class GhRelease(
@@ -48,6 +63,8 @@ data class ReleaseMatch(
 object GitHubClient {
 
     private val json = Json { ignoreUnknownKeys = true }
+    @Volatile private var rejectedToken: String? = null
+    @Volatile private var rateLimitedUntil: Long = 0
     private val REPO_URL = Regex(
         "^(?:https?://)?(?:www\\.)?github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\\.git)?(?:[/?#].*)?$",
         RegexOption.IGNORE_CASE,
@@ -58,10 +75,7 @@ object GitHubClient {
     suspend fun findSiloraRelease(tag: String, isTv: Boolean, token: String?): ReleaseMatch = withContext(Dispatchers.IO) {
         val url = "https://api.github.com/repos/${Silora.REPO}/releases/tags".toHttpUrl()
             .newBuilder().addPathSegment(tag).build()
-        val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-        if (!token.isNullOrBlank()) request.header("Authorization", "Bearer $token")
-        val release = Http.execute(request.build()).use { response ->
+        val release = githubRequest(url.toString(), token).use { response ->
             if (response.code == 404) throw IOException("This past release is no longer available on GitHub.")
             if (!response.isSuccessful) throw IOException("Could not check the past release (HTTP ${response.code}). Try again later.")
             json.decodeFromString<GhRelease>(response.body?.string() ?: throw IOException("Empty release information"))
@@ -105,6 +119,7 @@ object GitHubClient {
         val metadata = match.release.assets.firstOrNull { it.name == "build-info.json" }
             ?: throw IOException("This Silora release is missing its build information. Try again later.")
         Http.execute(Request.Builder().url(metadata.downloadUrl).build()).use { response ->
+            checkServerError(response)
             if (!response.isSuccessful) throw IOException("Couldn't check the Silora build (HTTP ${response.code}). Try again.")
             val body = response.body ?: throw IOException("Silora build information is empty")
             val info = Silora.parseBuildInfo(body.string(), match.release.tagName, match.asset.name)
@@ -139,25 +154,59 @@ object GitHubClient {
         json.decodeFromString(ListSerializer(GhRelease.serializer()), body)
 
     private suspend fun fetchReleases(ref: RepoRef, token: String?): List<GhRelease> {
-        val builder = Request.Builder()
-            .url("https://api.github.com/repos/${ref.owner}/${ref.repo}/releases?per_page=15")
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-        if (!token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
-        Http.execute(builder.build()).use { response ->
+        val url = "https://api.github.com/repos/${ref.owner}/${ref.repo}/releases?per_page=15"
+        githubRequest(url, token).use { response ->
             val body = response.body?.string().orEmpty()
             when {
                 response.isSuccessful -> return parseReleases(body)
                 response.code == 404 ->
                     throw IOException("Repository ${ref.slug} not found (private repos need a token)")
-                response.code == 401 ->
-                    throw IOException("GitHub token is invalid or expired")
-                (response.code == 403 || response.code == 429) &&
-                    (response.header("X-RateLimit-Remaining") == "0" || body.contains("rate limit", true)) ->
-                    throw IOException("GitHub is temporarily limiting update checks. Please try again in an hour.")
                 response.code == 403 -> throw IOException("GitHub denied access to ${ref.slug} (HTTP 403)")
                 else -> throw IOException("GitHub returned HTTP ${response.code}")
             }
         }
+    }
+
+    private suspend fun githubRequest(url: String, token: String?): Response {
+        val now = System.currentTimeMillis()
+        if (rateLimitedUntil > now) throw rateLimitError(rateLimitedUntil)
+        val builder = Request.Builder().url(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+        val credential = token?.takeIf { it.isNotBlank() && it != rejectedToken }
+        if (credential != null) builder.header("Authorization", "Bearer $credential")
+        var response = Http.execute(builder.build())
+        if (response.code == 401 && credential != null) {
+            response.close()
+            rejectedToken = credential
+            response = Http.execute(builder.removeHeader("Authorization").build())
+        }
+        try {
+            checkServerError(response)
+            if (response.code == 429 || (response.code == 403 &&
+                    (response.header("X-RateLimit-Remaining") == "0" || response.header("Retry-After") != null ||
+                        response.peekBody(4096).string().contains("rate limit", ignoreCase = true)))) {
+                val nowAtResponse = System.currentTimeMillis()
+                val retryAfter = response.header("Retry-After")?.toLongOrNull()?.let { nowAtResponse + it * 1000 }
+                val resetAt = response.header("X-RateLimit-Reset")?.toLongOrNull()?.times(1000)
+                    ?.takeIf { response.header("X-RateLimit-Remaining") == "0" }
+                val retryAt = maxOf(nowAtResponse + 60_000, retryAfter ?: 0, resetAt ?: 0)
+                rateLimitedUntil = retryAt
+                throw rateLimitError(retryAt)
+            }
+            return response
+        } catch (e: Exception) {
+            response.close()
+            throw e
+        }
+    }
+
+    private fun checkServerError(response: Response) {
+        if (response.code in 500..599) throw GitHubRetryException("GitHub is temporarily unavailable (HTTP ${response.code})")
+    }
+
+    private fun rateLimitError(retryAt: Long): GitHubRetryException {
+        val minutes = ((retryAt - System.currentTimeMillis() + 59_999) / 60_000).coerceAtLeast(1)
+        return GitHubRetryException("GitHub is limiting update checks. Try again in about $minutes min.", retryAt)
     }
 }

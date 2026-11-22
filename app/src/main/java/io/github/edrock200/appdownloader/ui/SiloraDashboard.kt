@@ -265,9 +265,9 @@ private fun SiloraUpdateCard(
                     checking -> "Checking for updates…"
                     item.waiting -> if (usingShizuku && !shizuku.ready) "An update is downloaded. ${shizuku.help}"
                         else if (playbackDeferral == PlaybackDeferral.ACTIVE)
-                            "Update downloaded · Waiting for playback to stop. Retries at the next scheduled check, or choose Install update."
+                            "Update downloaded · Waiting for playback to stop. The updater will try again, or choose Install update."
                         else if (playbackDeferral == PlaybackDeferral.UNAVAILABLE)
-                            "Update downloaded · Could not check playback. Retries at the next scheduled check, or choose Install update."
+                            "Update downloaded · Could not check playback. The updater will try again, or choose Install update."
                         else "An update is downloaded. Choose Install update to finish."
                     item.entry.lastCheckError != null -> item.entry.lastCheckError
                     item.hasUpdate -> "A new Silora build is ready. Update to keep watching at your best."

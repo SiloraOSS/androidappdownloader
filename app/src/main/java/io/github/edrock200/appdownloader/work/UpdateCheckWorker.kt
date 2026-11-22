@@ -7,41 +7,51 @@ import androidx.work.await
 import io.github.edrock200.appdownloader.app
 import io.github.edrock200.appdownloader.data.UpdatePreferences
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-/** Periodically checks monitored GitHub repositories and notifies about new releases. */
+/** Checks both public releases once, then uses the same results for downloads and notifications. */
 class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = withContext(Dispatchers.Main.immediate) {
         val app = applicationContext.app()
-        if (app.settings.current.checkIntervalHours <= 0) return Result.success()
-        try {
-            return checkUpdates()
-        } finally {
-            // UPDATE keeps the running worker alive. Wait for the override to be stored before
-            // finishing, or WorkManager could calculate the next run using a fixed 24-hour interval.
-            withContext(Dispatchers.Main.immediate) {
-                ensureActive()
-                val current = app.settings.current
-                if (current.hasDailyCheck) UpdateScheduler.schedule(applicationContext, current).await()
-            }
-        }
-    }
+        val state = app.settings.current
+        if (state.checkIntervalHours <= 0) return@withContext Result.success()
+        // Book the next local-time run before installing, because updating ourselves kills this process.
+        if (state.hasDailyCheck) UpdateScheduler.schedule(applicationContext, state).await()
 
-    private suspend fun checkUpdates(): Result {
-        val app = applicationContext.app()
-        if (UpdatePreferences.shouldInstall(app.settings.current)) {
-            val summary = app.controller.updateSelected(interactive = false) { UpdatePreferences.shouldInstall(app.settings.current) }
-            Notifications.showWaitingUpdates(applicationContext, app.controller.waitingUpdates())
-            Notifications.showUpdateFailures(applicationContext, summary.failed)
-        }
-        val updates = app.controller.checkAll()
-        val fresh = UpdatePreferences.unannouncedUpdates(updates)
-        if (fresh.isNotEmpty() && Notifications.showUpdates(applicationContext, fresh)) {
+        app.controller.reconcileInstallAttempts().join()
+        val checks = app.controller.checkForWorker()
+        val summary = if (checks != null && UpdatePreferences.shouldInstall(app.settings.current)) {
+            app.controller.updateSelected(interactive = false, checkedEntries = checks.entries) {
+                UpdatePreferences.shouldInstall(app.settings.current)
+            }.also {
+                Notifications.showWaitingUpdates(applicationContext, app.controller.waitingUpdates())
+                Notifications.showUpdateFailures(applicationContext, it.failed)
+            }
+        } else null
+
+        val fresh = UpdatePreferences.unannouncedUpdates(app.controller.entriesWithUpdates())
+            .filter { checks?.entries?.containsKey(it.id) == true }
+        if (checks != null && fresh.isNotEmpty() && Notifications.showUpdates(applicationContext, fresh)) {
             app.controller.markUpdatesNotified(fresh)
         }
-        android.util.Log.i("SiloraUpdater", "Background update check completed")
-        return Result.success()
+
+        val shouldRetry = checks == null || checks.retryableErrors.isNotEmpty() || summary?.retryDownload == true
+        val current = app.settings.current
+        if (shouldRetry && runAttemptCount < MAX_RETRIES && current.checkIntervalHours > 0) {
+            if (current.hasDailyCheck || checks?.retryAt != null) {
+                // A daily override takes precedence over WorkManager backoff. Replace it for this
+                // retry, then book the configured local hour again at the start of the next attempt.
+                val retryAt = maxOf(checks?.retryAt ?: 0, System.currentTimeMillis() + RETRY_DELAY_MS)
+                UpdateScheduler.schedule(applicationContext, current, retryAt = retryAt).await()
+            }
+            return@withContext Result.retry()
+        }
+        Result.success()
+    }
+
+    companion object {
+        private const val MAX_RETRIES = 3
+        private const val RETRY_DELAY_MS = 15 * 60_000L
     }
 }

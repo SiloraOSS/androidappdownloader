@@ -13,33 +13,18 @@ class InstallResultReceiver : BroadcastReceiver() {
         val controller = context.app().controller
         val entryId = intent.getStringExtra(ApkInstaller.EXTRA_ENTRY_ID) ?: return
         val restoreAttemptId = intent.getStringExtra(ApkInstaller.EXTRA_RESTORE_ATTEMPT)
-        if (!controller.acceptsInstallResult(entryId, restoreAttemptId)) return
+        val attemptId = intent.getStringExtra(ApkInstaller.EXTRA_ATTEMPT)
         val status = if (intent.getBooleanExtra(ApkInstaller.EXTRA_SHIZUKU, false)) resultCode
             else intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val background = intent.getBooleanExtra(ApkInstaller.EXTRA_BACKGROUND, false)
 
-        when (status) {
-            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                if (background) {
-                    // Android wants the user to confirm. Nobody is watching a scheduled run, so leave
-                    // the downloaded update waiting for the next time the app is opened.
-                    val sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
-                    if (sessionId >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
-                    controller.onBackgroundInstallNeedsUser(entryId)
-                    return
-                }
-                val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
-                if (confirm == null) {
-                    controller.onInstallFailed(entryId, status, "Installer did not provide a confirmation screen", restoreAttemptId = restoreAttemptId)
-                    return
-                }
-                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                try {
-                    context.startActivity(confirm)
-                } catch (e: Exception) {
-                    controller.onInstallFailed(entryId, status, "Could not show the install prompt: ${e.message}", restoreAttemptId = restoreAttemptId)
-                }
-            }
+        val pending = goAsync()
+        val job = when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> controller.onInstallNeedsConfirmation(
+                entryId, attemptId, intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1),
+                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java),
+                background, restoreAttemptId,
+            )
             PackageInstaller.STATUS_SUCCESS -> controller.onInstallSucceeded(
                 entryId = entryId,
                 releaseTag = intent.getStringExtra(ApkInstaller.EXTRA_TAG),
@@ -49,6 +34,8 @@ class InstallResultReceiver : BroadcastReceiver() {
                 previousVersionName = intent.getStringExtra(ApkInstaller.EXTRA_PREV_VERSION_NAME),
                 previousVersionCode = intent.getLongExtra(ApkInstaller.EXTRA_PREV_VERSION_CODE, -1L).takeIf { it >= 0 },
                 restoreAttemptId = restoreAttemptId,
+                attemptId = attemptId,
+                versionName = intent.getStringExtra(ApkInstaller.EXTRA_VERSION_NAME),
             )
             else -> controller.onInstallFailed(
                 entryId,
@@ -56,7 +43,9 @@ class InstallResultReceiver : BroadcastReceiver() {
                 intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE),
                 keepDownload = intent.getBooleanExtra(ApkInstaller.EXTRA_KEEP_DOWNLOAD, false),
                 restoreAttemptId = restoreAttemptId,
+                attemptId = attemptId,
             )
         }
+        job.invokeOnCompletion { pending.finish() }
     }
 }
