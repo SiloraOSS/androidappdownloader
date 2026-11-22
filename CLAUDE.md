@@ -11,9 +11,10 @@ Android TV.
 
 ## Silora Updater fork
 
-The active app is Silora Updater (`org.silora.updater`). Use `./build.sh` for the checked,
-signed release workflow (release tests, lint, signing verification), and see the README's fork
-sections. The upstream reference below describes the inherited generic UI, which is not active.
+The active app is Silora Updater (`org.silora.updater`). One APK supports Android phones and
+tablets, Fire TV, Android TV, and Google TV. Use `./build.sh` for the checked, signed release
+workflow (release tests, lint, signing verification), and see the README's fork sections. The
+upstream reference below describes the inherited generic UI.
 Self-updates now use `BuildConfig.UPDATE_REPO` (`SiloraOSS/androidappdownloader`) and the exact
 `SiloraUpdater-tv.apk` asset. `SelfUpdateStore` saves the updater's `AppEntry` separately from
 Silora's fixed repository/history; managed-entry helpers share checking, staged downloads,
@@ -131,9 +132,9 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - **Releases:** running the workflow manually with input `version: X.Y.Z` (or pushing tag `vX.Y.Z`)
   sets `APP_VERSION_NAME` (versionCode =
   X*10000 + Y*100 + Z, computed in `app/build.gradle.kts`), signs with the `SIGNING_*` secrets,
-  publishes the release with the fixed asset name `AppDownloader.apk`, and posts to the
-  `DISCORD_WEBHOOK` secret (aftv.news code `9697744`, overridable with the `AFTV_CODE` repository variable). Stable download link:
-  `https://github.com/edrock200/androidappdownloader/releases/latest/download/AppDownloader.apk`.
+  and publishes `SiloraUpdater-tv.apk` with its checksum. The `AFTV_CODE` repository variable
+  overrides the Downloader code in generated release notes. The Silora Updater repository defaults
+  to `7394471`, which targets the latest APK permalink.
 
 ## Conventions and gotchas
 
@@ -161,16 +162,14 @@ Unit tests are in `app/src/test/...` and cover the pure logic only.
 - Don't commit keystores or `local.properties`. Release signing is configured via `SIGNING_*`
   environment variables (see README). The only committed APKs are the signed release builds in
   `releases/`; never put a debug-signed APK there, because a different key breaks in-place updates.
-- Record user-visible changes in `CHANGELOG.md` under *Unreleased*, written in plain language for
-  non-technical users — the section becomes the release notes and the Discord announcement. When
+- Record user-visible changes in `CHANGELOG.md` under *Unreleased* in plain language. When
   releasing, rename it to `## [X.Y.Z]` and tag `vX.Y.Z`. Don't edit versionCode/versionName by hand
   (they come from the tag); only update the local-build default in `app/build.gradle.kts`.
-- Release notes and the Discord announcement are for everyone, not just TV users: the app runs on
-  Android phones and tablets as well as Fire TV / Android TV, so install instructions must cover both
-  (see `.github/scripts/discord-notify.sh` and the "Write release notes" workflow step). Only publish
-  a release (which posts to Discord) when the user asks for one.
-- Never rename the release asset `AppDownloader.apk`: the "latest" download link, the aftv.news code
-  and in-app self-update all depend on it.
+- Cover phone, tablet, and TV installation in release notes and announcements. Use
+  `WITH_INSTALL_STEPS=1 .github/scripts/release-notes.sh X.Y.Z` for GitHub release notes.
+  Only publish a release when the user asks for one.
+- Keep the shared release asset name `SiloraUpdater-tv.apk` for the latest-APK permalink,
+  Downloader code `7394471`, and in-app self-updates.
 
 ## Not covered by tests
 

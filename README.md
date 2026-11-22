@@ -1,22 +1,19 @@
 # Silora Updater
 
-A dedicated installer and updater for **Silora**, based on App Downloader by edrock200.
+A dedicated installer and updater for **Silora**, based on App Downloader by edrock200. The same
+Silora Updater APK supports Android phones and tablets, Android TV, Google TV, and Fire TV.
 
-## Download for Android TV
+## Download and install
 
-- **[Download the latest Android TV APK](https://github.com/SiloraOSS/androidappdownloader/releases/latest/download/SiloraUpdater-tv.apk)**
-- **Downloader code: `7394471`** — [aftvnews.com/7394471](https://aftvnews.com/7394471)
-- [Latest release and notes](https://github.com/SiloraOSS/androidappdownloader/releases/latest)
-- [All releases](https://github.com/SiloraOSS/androidappdownloader/releases)
+**[Download the latest Silora Updater APK](https://github.com/SiloraOSS/androidappdownloader/releases/latest/download/SiloraUpdater-tv.apk)** · [Latest release notes](https://github.com/SiloraOSS/androidappdownloader/releases/latest) · [All releases](https://github.com/SiloraOSS/androidappdownloader/releases)
 
-The current release is for **Android TV / Google TV**. Phone and tablet use has not been
-tested and is not part of this release. These links always point to the latest release;
-the TV asset name stays `SiloraUpdater-tv.apk` across versions.
+- **Phone or tablet** — Open the APK download link in your browser, then open the downloaded file.
+- **TV** — Open **Downloader** and enter code **`7394471`** ([aftv.news/7394471](https://aftv.news/7394471)),
+  or open the APK download link on your TV.
 
-On your TV, open **Downloader** and enter code **7394471**, or use the APK download link above.
 Allow installation from that source when Android asks, and install **Silora Updater**.
 Open it, follow the one-time welcome and permission setup, then choose **Install Silora**
-or **Update Silora**.
+or **Update Silora**. The shared APK is named `SiloraUpdater-tv.apk` on all supported devices.
 
 ## How it works
 
@@ -180,20 +177,21 @@ Gradle's local default is used. Use a higher version for future updater releases
 For CI or direct Gradle builds, supply `SIGNING_KEYSTORE_FILE`, `SIGNING_KEYSTORE_PASSWORD`,
 `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`. Release builds never fall back to a debug key.
 
-### Publish an Android TV release
+### Publish a release
 
 For a local release, build with `./build.sh --version X.Y.Z`, publish the verified
-`dist/SiloraUpdater.apk` as **`SiloraUpdater-tv.apk`**, and include a `SHA256SUMS` file using that
-asset name. Keep this name unchanged so the permanent download link above continues working.
-This is the shared APK distributed for TV; it does not enforce a TV-only installation restriction.
-Phone and tablet releases remain deferred until tested.
+`dist/SiloraUpdater.apk` as **`SiloraUpdater-tv.apk`**, and regenerate `SHA256SUMS` using the
+published filename. Existing updaters look for that exact filename during self-update checks.
+The latest APK permalink and Downloader code `7394471` also depend on it.
 
-The GitHub Actions release workflow uses the same TV asset name and includes checksums. It
-requires the four `SIGNING_*` repository secrets described above; local publishing uses the
-existing external signing directory. Add versioned notes to `CHANGELOG.md` before publishing.
+Add versioned notes to `CHANGELOG.md`. For a local release, generate the same GitHub release
+notes and install steps as CI with `WITH_INSTALL_STEPS=1 .github/scripts/release-notes.sh X.Y.Z`.
+Use the title **Silora Updater X.Y.Z**. The GitHub Actions workflow uses the same public filename
+and includes checksums. It requires the `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`,
+`SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` repository secrets.
 
-The upstream Downloader code and download links in the historical documentation below install
-the original App Downloader, not this fork.
+The Downloader code and download links in the upstream reference below install the original
+App Downloader.
 
 ---
 

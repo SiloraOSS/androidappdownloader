@@ -15,10 +15,6 @@ on:
 permissions:
   contents: write
 
-env:
-  # Stable link that always serves the newest release (keep the asset name fixed).
-  LATEST_APK_URL: https://github.com/${{ github.repository }}/releases/latest/download/SiloraUpdater-tv.apk
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -104,19 +100,9 @@ jobs:
         if: env.IS_RELEASE == 'true'
         env:
           AFTV_CODE: ${{ vars.AFTV_CODE }}
+          WITH_INSTALL_STEPS: '1'
         run: |
-          .github/scripts/release-notes.sh "$APP_VERSION_NAME" > "$RUNNER_TEMP/notes.md"
-          {
-            cat "$RUNNER_TEMP/notes.md"
-            echo
-            echo "## How to install"
-            echo "This release is for Android TV / Google TV. Phone and tablet use is untested and is not part of this release."
-            if [ -n "$AFTV_CODE" ]; then
-              echo "- **TV:** in the Downloader app, enter code **$AFTV_CODE**"
-            fi
-            echo "- **Direct download (always the latest version):** $LATEST_APK_URL"
-            echo "- Open Silora Updater and choose Install Silora or Update Silora."
-          } > "$RUNNER_TEMP/release-body.md"
+          .github/scripts/release-notes.sh "$APP_VERSION_NAME" > "$RUNNER_TEMP/release-body.md"
 
       - name: Publish GitHub release
         id: release
@@ -125,7 +111,7 @@ jobs:
         with:
           tag_name: v${{ env.APP_VERSION_NAME }}
           target_commitish: ${{ github.sha }}
-          name: Silora Updater ${{ env.APP_VERSION_NAME }} — Android TV
+          name: Silora Updater ${{ env.APP_VERSION_NAME }}
           body_path: ${{ runner.temp }}/release-body.md
           files: |
             dist/SiloraUpdater-tv.apk

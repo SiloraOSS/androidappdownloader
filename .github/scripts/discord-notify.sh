@@ -12,24 +12,24 @@ if [ "${#notes}" -gt 2500 ]; then
 Full details: ${RELEASE_URL}"
 fi
 
-# Works on every Android device: phones, tablets, Fire TV and Android TV.
-how="**How to get it** (Android phones, tablets, Fire TV and Android TV)"
+how="**How to get it**"
+how+=$'\n'"The same APK works on Android phones and tablets, Android TV, Google TV, and Fire TV."
+how+=$'\n'"📱 **Phone or tablet** — open the download link below in your browser and install the APK."
 if [ -n "${AFTV_CODE:-}" ]; then
-  how+=$'\n'"📱 **Phone or tablet:** open https://aftv.news/${AFTV_CODE} in your browser and install the download"
-  how+=$'\n'"📺 **TV:** open the **Downloader** app and enter code **${AFTV_CODE}**"
+  how+=$'\n'"📺 **TV** — open **Downloader** and enter code **${AFTV_CODE}**."
 else
-  how+=$'\n'"📱 **Phone or tablet:** open the direct download link below in your browser and install it"
+  how+=$'\n'"📺 **TV** — open the download link below in **Downloader** or your TV browser."
 fi
-how+=$'\n'"⬇️ **Direct download:** ${DOWNLOAD_URL}"
+how+=$'\n'"⬇️ [Download the APK](${DOWNLOAD_URL})"
 
-description="**What's new**"$'\n'"${notes}"$'\n\n'"${how}"$'\n\n'"Already using App Downloader? Just open it and it will offer to update itself."
+description="**What's new**"$'\n'"${notes}"$'\n\n'"${how}"$'\n\n'"Already using Silora Updater? Open it to check for an update."
 
 payload=$(jq -n \
-  --arg title "App Downloader ${VERSION} is out!" \
+  --arg title "Silora Updater ${VERSION} is out!" \
   --arg url "$RELEASE_URL" \
   --arg description "$description" \
   '{
-     username: "App Downloader",
+     username: "Silora Updater",
      embeds: [{ title: $title, url: $url, description: $description, color: 1999845 }]
    }')
 

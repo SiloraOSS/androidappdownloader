@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-21
+
+### Changed
+- Document support for Android phones and tablets alongside Android TV, Google TV, and Fire TV.
+  All devices use the same Silora Updater APK.
+
 ## [1.0.8] - 2026-11-14
 
 ### Added
@@ -70,12 +76,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.0.2] - 2026-11-08
 
-First Silora Updater release, distributed for Android TV / Google TV. Phone and tablet use
-remains untested and is not included in this release. Older changelog sections describe the
-upstream App Downloader history rather than this fork's release sequence.
+First Silora Updater release. The download was originally listed for Android TV and Google TV.
+The same APK also supports Android phones and tablets. Older entries describe upstream App
+Downloader history.
 
 ### Added
-- Permanent latest-release and Android TV APK links in the README, with a fixed
+- Latest-release and direct APK links in the README, with the original
   `SiloraUpdater-tv.apk` release asset name and SHA-256 checksums.
 - Past installs beside Settings lists recorded builds and restores a saved APK or that exact
   GitHub release on demand, without scanning or polling release history. APKs are prepared and
@@ -196,7 +202,7 @@ upstream App Downloader history rather than this fork's release sequence.
 - If Android needs you to confirm an install, the update is downloaded in advance and waits
   for you. Next time you open App Downloader it offers to install it with one click.
 
-## [1.1.0] - 2026-11-03
+## [App Downloader 1.1.0] - 2026-11-03
 
 ### Added
 - App Downloader now checks for its own updates when you open it and offers to install them.
